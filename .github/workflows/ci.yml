@@ -1,0 +1,45 @@
+name: CI Check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Syntax check
+        run: python -m py_compile app.py && python -m py_compile models.py && python -m py_compile game_data.py && python -m py_compile events.py
+
+      - name: Import test
+        run: python -c "from app import app; print('Import OK')"
+
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t xiantu-test .
+
+      - name: Start container
+        run: docker run -d --name xiantu-test -p 5000:5000 xiantu-test
+
+      - name: Wait and check
+        run: sleep 3 && curl -s http://localhost:5000 | grep -q "仙途" && echo "OK"
+
+      - name: Cleanup
+        if: always()
+        run: docker rm -f xiantu-test

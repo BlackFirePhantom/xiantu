@@ -1,0 +1,59 @@
+name: Bug Report / Bug 反馈
+description: 提交 Bug 或游戏异常
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢你提交 Bug 反馈！请尽量填写以下信息，方便定位问题。
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug 描述
+      description: 简要描述你遇到的问题
+      placeholder: 例如：在幽冥祭坛战斗时游戏无响应
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 如何触发这个 Bug？
+      placeholder: |
+        1. 登录游戏
+        2. 前往幽冥祭坛
+        3. 点击斩妖
+        4. 出现错误
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望行为
+      description: 你期望发生什么？
+    validations:
+      required: false
+
+  - type: dropdown
+    id: browser
+    attributes:
+      label: 浏览器
+      options:
+        - Chrome
+        - Firefox
+        - Safari
+        - Edge
+        - 其他
+    validations:
+      required: false
+
+  - type: input
+    id: os
+    attributes:
+      label: 操作系统
+      placeholder: Windows 11 / macOS / Ubuntu 22.04
+    validations:
+      required: false
