@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>仙途 — 修仙文字在线</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        {% if page == 'login' %}
+        <div class="auth-box">
+            <h1>仙途</h1>
+            <p class="subtitle">逆天修仙，证道长生</p>
+            {% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+            {% if success %}<div class="alert alert-success">{{ success }}</div>{% endif %}
+            <form method="POST" action="/login">
+                <div class="form-group">
+                    <label>道号</label>
+                    <input type="text" name="username" required autofocus maxlength="16">
+                </div>
+                <div class="form-group">
+                    <label>密令</label>
+                    <input type="password" name="password" required>
+                </div>
+                <button type="submit" class="btn btn-primary">踏入仙途</button>
+            </form>
+            <p class="link-text">尚无道号？<a href="/register">注册修炼</a></p>
+        </div>
+
+        {% elif page == 'register' %}
+        <div class="auth-box">
+            <h1>注册道号</h1>
+            <p class="subtitle">取一道号，踏上修仙之路</p>
+            {% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+            <form method="POST" action="/register">
+                <div class="form-group">
+                    <label>道号</label>
+                    <input type="text" name="username" required autofocus maxlength="16">
+                </div>
+                <div class="form-group">
+                    <label>密令</label>
+                    <input type="password" name="password" required minlength="4">
+                </div>
+                <button type="submit" class="btn btn-primary">注册</button>
+            </form>
+            <p class="link-text">已有道号？<a href="/login">登录</a></p>
+        </div>
+
+        {% elif page == 'create' %}
+        <div class="auth-box">
+            <h1>选道号</h1>
+            <p class="subtitle">为你的修士身份取一个名号吧</p>
+            {% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+            <form method="POST" action="/create">
+                <div class="form-group">
+                    <label>道号</label>
+                    <input type="text" name="name" required autofocus maxlength="12">
+                </div>
+                <button type="submit" class="btn btn-primary">开始修炼</button>
+            </form>
+        </div>
+        {% endif %}
+    </div>
+</body>
+</html>

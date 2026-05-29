@@ -1,0 +1,451 @@
+/* ===== 仙途 — 修仙主题样式 ===== */
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    font-family: "Microsoft YaHei", "PingFang SC", serif;
+    background: #0a0e14;
+    color: #c8c0b0;
+    min-height: 100vh;
+    overflow-x: hidden;
+}
+
+a { color: #7eb8da; text-decoration: none; }
+a:hover { color: #a8d8ea; text-decoration: underline; }
+
+/* ===== 登录页 ===== */
+.container { display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+
+.auth-box {
+    background: linear-gradient(145deg, #141a20, #0f1519);
+    border: 1px solid #2a3a32;
+    border-radius: 12px;
+    padding: 44px 40px;
+    width: 400px;
+    max-width: 90vw;
+    text-align: center;
+    box-shadow: 0 0 40px rgba(80, 180, 120, 0.06);
+}
+
+.auth-box h1 {
+    color: #8fd4a0;
+    font-size: 32px;
+    margin-bottom: 4px;
+    letter-spacing: 8px;
+    text-shadow: 0 0 20px rgba(100, 200, 140, 0.3);
+}
+.subtitle { color: #6a8a7a; margin-bottom: 28px; font-size: 14px; letter-spacing: 2px; }
+
+.form-group { margin-bottom: 16px; text-align: left; }
+.form-group label { display: block; color: #6a8a7a; font-size: 13px; margin-bottom: 4px; letter-spacing: 1px; }
+.form-group input {
+    width: 100%;
+    padding: 10px 12px;
+    background: #0a0e14;
+    border: 1px solid #2a3a32;
+    border-radius: 6px;
+    color: #c8c0b0;
+    font-size: 15px;
+}
+.form-group input:focus { border-color: #5a9a6a; outline: none; box-shadow: 0 0 8px rgba(90, 154, 106, 0.2); }
+
+.alert { padding: 10px; border-radius: 6px; margin-bottom: 16px; font-size: 14px; }
+.alert-error { background: #2a1518; color: #d45555; border: 1px solid #d4555544; }
+.alert-success { background: #152a1a; color: #6abd7a; border: 1px solid #6abd7a44; }
+
+.btn {
+    padding: 10px 24px;
+    border: 1px solid #2a3a32;
+    border-radius: 6px;
+    background: #1a2420;
+    color: #c8c0b0;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.2s;
+    letter-spacing: 1px;
+}
+.btn:hover { background: #243028; border-color: #5a9a6a; }
+.btn-primary {
+    background: linear-gradient(135deg, #2a5a3a, #1a3a2a);
+    border-color: #4a8a5a;
+    color: #d4ecc0;
+    width: 100%;
+    font-size: 16px;
+    letter-spacing: 4px;
+}
+.btn-primary:hover { background: linear-gradient(135deg, #3a6a4a, #2a5a3a); }
+.btn-sm { padding: 6px 12px; font-size: 12px; }
+.btn-tiny { padding: 2px 8px; font-size: 11px; border: 1px solid #2a3a32; border-radius: 4px; background: #1a2420; color: #6a8a7a; cursor: pointer; margin-left: 6px; }
+.btn-tiny:hover { background: #243028; }
+.btn-fight { background: #3a2020; border-color: #8a4040; color: #e8b0b0; }
+.btn-fight:hover { background: #502828; }
+.btn-rest { background: #1a2a3a; border-color: #4a6a8a; color: #b0c8e0; }
+.btn-rest:hover { background: #243444; }
+.btn-breakthrough { background: #3a2a10; border-color: #8a6a30; color: #e8d0a0; }
+.btn-breakthrough:hover { background: #4a3a18; }
+.btn-leaderboard { background: #2a2a3a; border-color: #6a5a8a; color: #c0b0e0; }
+.btn-leaderboard:hover { background: #343444; }
+
+.link-text { margin-top: 16px; font-size: 14px; color: #6a8a7a; }
+
+/* ===== 顶栏 ===== */
+.top-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 20px;
+    background: linear-gradient(90deg, #0f1519, #141a20);
+    border-bottom: 1px solid #2a3a32;
+}
+.game-title {
+    color: #8fd4a0;
+    font-size: 20px;
+    font-weight: bold;
+    letter-spacing: 6px;
+    text-shadow: 0 0 12px rgba(100, 200, 140, 0.3);
+}
+.user-info { color: #6a8a7a; font-size: 13px; }
+.logout-link { color: #d45555; }
+
+/* ===== 游戏布局 ===== */
+.game-layout {
+    display: grid;
+    grid-template-columns: 260px 1fr 280px;
+    gap: 0;
+    height: calc(100vh - 45px);
+}
+
+.panel {
+    padding: 16px;
+    overflow-y: auto;
+    border-right: 1px solid #1e2a22;
+}
+.panel h3 {
+    color: #8fd4a0;
+    font-size: 14px;
+    margin-bottom: 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #1e2a22;
+    letter-spacing: 2px;
+}
+
+.player-panel { background: #0a0e14; }
+.game-panel { background: #0f1519; }
+.right-panel { background: #0a0e14; border-right: none; }
+
+/* ===== 角色属性 ===== */
+.stat-line {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 0;
+    font-size: 13px;
+}
+.stat-line span:first-child { color: #6a8a7a; }
+
+.realm-text { color: #8fd4a0; font-weight: bold; }
+.gold-text { color: #d4b870; }
+
+.bar-container {
+    flex: 1;
+    margin-left: 8px;
+    height: 18px;
+    background: #1a2420;
+    border-radius: 9px;
+    overflow: hidden;
+    position: relative;
+}
+.bar { height: 100%; border-radius: 9px; transition: width 0.4s ease; }
+.hp-bar { background: linear-gradient(90deg, #6a2a2a, #a04040); }
+.bar-text {
+    position: absolute;
+    right: 6px;
+    top: 0;
+    line-height: 18px;
+    font-size: 11px;
+    color: #e8c0b0;
+    text-shadow: 0 0 2px #000;
+}
+
+.equip-slot { cursor: pointer; color: #7eb8da; font-size: 12px; }
+.equip-slot:hover { text-decoration: underline; }
+
+/* ===== 背包 & 坊市 ===== */
+.item-list { max-height: 200px; overflow-y: auto; }
+.item-entry {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 6px;
+    font-size: 12px;
+    border-bottom: 1px solid #1a2018;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.item-entry:hover { background: #1a2420; }
+.item-name { color: #c8c0b0; }
+.item-count { color: #6a8a7a; font-size: 11px; margin-left: 4px; }
+.item-price { color: #d4b870; font-size: 11px; }
+
+/* ===== 地点 ===== */
+#location-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+#loc-name { color: #8fd4a0; font-size: 20px; letter-spacing: 2px; }
+.badge {
+    padding: 2px 10px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: bold;
+    letter-spacing: 1px;
+}
+.badge-safe { background: #2a5a3a; color: #8fd4a0; }
+.badge-danger { background: #5a2a2a; color: #e8a0a0; }
+.location-desc { color: #7a8a7a; margin-bottom: 12px; line-height: 1.8; font-size: 13.5px; }
+.npc-text {
+    background: #141e18;
+    padding: 12px;
+    border-radius: 6px;
+    margin-bottom: 12px;
+    font-size: 13px;
+    line-height: 1.8;
+    border-left: 3px solid #4a8a5a;
+}
+.npc-text strong { color: #8fd4a0; }
+
+/* ===== 操作栏 ===== */
+.action-bar { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+
+/* ===== 战斗日志 ===== */
+.game-log {
+    background: #080c10;
+    border: 1px solid #1e2a22;
+    border-radius: 6px;
+    padding: 12px;
+    height: calc(100% - 120px);
+    min-height: 300px;
+    overflow-y: auto;
+    font-size: 13px;
+    line-height: 1.9;
+}
+.log-line { padding: 1px 0; }
+.log-move { color: #7eb8da; }
+.log-desc { color: #6a8a7a; }
+.log-error { color: #d45555; }
+.log-heal { color: #6abd7a; }
+.log-info { color: #d4b870; }
+.log-buff { color: #c8a0e8; }
+.log-equip { color: #7ec8da; }
+.log-shop { color: #d4b870; }
+.log-system { color: #6a8a7a; font-style: italic; }
+.log-fight { color: #c8c0b0; }
+.log-fight-win { color: #8fd4a0; font-weight: bold; }
+.log-fight-lose { color: #d45555; font-weight: bold; }
+.log-chat-name { color: #7eb8da; font-weight: bold; }
+.log-player-move { color: #6a8a7a; font-style: italic; }
+
+/* ===== 移动按钮 ===== */
+.conn-list { display: flex; flex-direction: column; gap: 4px; margin-bottom: 16px; }
+.conn-btn {
+    padding: 8px 12px;
+    background: #1a2420;
+    border: 1px solid #2a3a32;
+    border-radius: 6px;
+    color: #c8c0b0;
+    cursor: pointer;
+    text-align: left;
+    font-size: 13px;
+    transition: all 0.15s;
+}
+.conn-btn:hover { background: #243028; border-color: #5a9a6a; color: #8fd4a0; }
+
+/* ===== 聊天 ===== */
+.chat-log {
+    background: #080c10;
+    border: 1px solid #1e2a22;
+    border-radius: 6px;
+    padding: 8px;
+    height: calc(100vh - 400px);
+    min-height: 200px;
+    overflow-y: auto;
+    font-size: 12px;
+    margin-bottom: 8px;
+    line-height: 1.6;
+}
+.chat-msg { padding: 1px 0; }
+.chat-msg .name { color: #7eb8da; font-weight: bold; }
+.chat-msg .text { color: #c8c0b0; }
+.chat-sys { color: #6a8a7a; font-style: italic; }
+
+.chat-input-wrap { display: flex; gap: 4px; }
+.chat-input-wrap input {
+    flex: 1;
+    padding: 8px;
+    background: #080c10;
+    border: 1px solid #2a3a32;
+    border-radius: 6px;
+    color: #c8c0b0;
+    font-size: 13px;
+}
+.chat-input-wrap input:focus { border-color: #5a9a6a; outline: none; }
+
+/* ===== 弹窗 ===== */
+.modal {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.75);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 100;
+}
+.modal-content {
+    background: #141a20;
+    border: 1px solid #2a3a32;
+    border-radius: 12px;
+    padding: 24px;
+    width: 480px;
+    max-width: 90vw;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+.modal-content h3 { margin-bottom: 16px; color: #8fd4a0; letter-spacing: 4px; }
+
+.lb-table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+.lb-table th, .lb-table td {
+    padding: 6px 10px;
+    text-align: left;
+    font-size: 13px;
+    border-bottom: 1px solid #1e2a22;
+}
+.lb-table th { color: #6a8a7a; }
+.lb-rank { color: #d4b870; font-weight: bold; }
+
+/* ===== 挂机指示器 ===== */
+.afk-badge {
+    color: #d4b870;
+    font-size: 12px;
+    padding: 2px 8px;
+    border: 1px solid #9a7a3a;
+    border-radius: 4px;
+    margin-right: 8px;
+    animation: afk-pulse 2s ease-in-out infinite;
+}
+@keyframes afk-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* ===== 新增系统按钮 ===== */
+.btn-tech { background: #1a2a3a; border-color: #4a7a9a; color: #a0c8e0; }
+.btn-tech:hover { background: #243444; }
+.btn-meridian { background: #2a1a3a; border-color: #7a5a9a; color: #c0a0e0; }
+.btn-meridian:hover { background: #342444; }
+.btn-alchemy { background: #2a2a1a; border-color: #9a8a4a; color: #e0d0a0; }
+.btn-alchemy:hover { background: #343424; }
+.btn-learn { background: #2a4a3a; border-color: #5a9a6a; color: #8fd4a0; margin-top: 6px; }
+.btn-learn:hover { background: #3a5a4a; }
+.btn-fortune-choice { background: #2a3a2a; border-color: #5a8a5a; color: #b0e0b0; margin: 4px; padding: 8px 16px; }
+.btn-fortune-choice:hover { background: #3a4a3a; border-color: #7aaa7a; }
+
+/* ===== 灵根/倍率文本 ===== */
+.root-text { color: #c8a0e8; font-weight: bold; }
+.mult-text { color: #d4b870; }
+
+/* ===== 奇遇弹窗 ===== */
+.fortune-popup {
+    background: linear-gradient(145deg, #1a2a1a, #142014);
+    border: 2px solid #4a8a4a;
+    border-radius: 10px;
+    padding: 18px;
+    margin-bottom: 12px;
+    box-shadow: 0 0 20px rgba(80, 180, 100, 0.15);
+}
+.fortune-header { margin-bottom: 8px; }
+.fortune-title { color: #d4e8b0; font-size: 16px; font-weight: bold; letter-spacing: 2px; }
+.fortune-text { color: #a0b890; font-size: 13px; line-height: 1.7; margin-bottom: 12px; }
+.fortune-choices { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ===== 功法条目 ===== */
+.modal-content h4 { color: #6a8a7a; font-size: 13px; margin: 12px 0 8px; letter-spacing: 1px; }
+.divider { border: none; border-top: 1px solid #1e2a22; margin: 12px 0; }
+
+.tech-entry, .mer-entry, .alchemy-entry {
+    background: #0f1519;
+    border: 1px solid #1e2a22;
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-bottom: 6px;
+    position: relative;
+}
+.tech-entry.learned { border-color: #2a5a3a; }
+.tech-entry.unlockable { border-color: #3a4a32; cursor: default; }
+.tech-entry.locked { opacity: 0.5; border-color: #1e2a22; }
+.mer-entry.opened { border-color: #3a2a5a; background: #141a20; }
+.mer-entry.unlockable { border-color: #3a3a32; }
+.mer-entry.locked { opacity: 0.5; }
+
+.tech-name, .mer-name { color: #c8c0b0; font-weight: bold; font-size: 14px; }
+.tech-tier { color: #d4b870; font-size: 12px; margin-left: 8px; }
+.tech-status { color: #6abd7a; font-size: 12px; margin-left: 8px; }
+.tech-desc { color: #6a8a7a; font-size: 12px; margin-top: 4px; }
+.tech-req { color: #5a7a6a; font-size: 11px; margin-top: 2px; }
+.mer-bonus { color: #7eb8da; font-size: 12px; margin-left: 8px; }
+.mer-desc { color: #6a8a7a; font-size: 12px; margin-top: 4px; }
+.mer-req { color: #5a7a6a; font-size: 11px; margin-top: 2px; }
+
+/* ===== 坊市分类标题 ===== */
+.shop-cat-header {
+    color: #4a7a5a;
+    font-size: 11px;
+    padding: 6px 6px 2px;
+    letter-spacing: 2px;
+    text-align: center;
+}
+
+/* ===== 炼器面板 ===== */
+.btn-forge { background: #2a2018; border-color: #9a7a3a; color: #e0c080; }
+.btn-forge:hover { background: #342a1e; }
+.btn-forge-action { background: #3a2a10; border-color: #8a6a30; color: #e8d0a0; margin-top: 6px; }
+.btn-forge-action:hover { background: #4a3a18; }
+
+.forge-hint { color: #5a7a6a; font-size: 12px; margin-bottom: 12px; line-height: 1.6; }
+.forge-cat-header {
+    color: #9a7a3a;
+    font-size: 12px;
+    padding: 10px 6px 4px;
+    letter-spacing: 3px;
+    text-align: center;
+    font-weight: bold;
+}
+.forge-entry {
+    background: #0f1519;
+    border: 1px solid #1e2a22;
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-bottom: 6px;
+}
+.forge-entry.unlockable { border-color: #3a3a20; }
+.forge-entry.locked { opacity: 0.5; }
+.forge-row1 { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.forge-name { color: #c8c0b0; font-weight: bold; font-size: 14px; }
+.forge-desc { color: #6a8a7a; font-size: 12px; }
+.forge-rate { font-size: 12px; font-weight: bold; margin-left: auto; }
+.forge-row2 { color: #7a8a7a; font-size: 12px; margin-top: 4px; }
+.forge-row3 { color: #5a7a6a; font-size: 11px; margin-top: 2px; }
+
+/* ===== 响应式 ===== */
+@media (max-width: 900px) {
+    .game-layout {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto 1fr auto;
+        height: auto;
+    }
+    .panel { border-right: none; border-bottom: 1px solid #1e2a22; }
+    .player-panel { max-height: 300px; }
+    .right-panel { max-height: 400px; }
+}
+
+/* ===== 滚动条 ===== */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #2a3a32; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #3a4a42; }

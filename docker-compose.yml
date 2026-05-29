@@ -1,0 +1,15 @@
+version: "3.8"
+services:
+  xiantu:
+    build: .
+    container_name: xiantu
+    ports:
+      - "8500:5000"
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "1.5"
+          memory: 512M
