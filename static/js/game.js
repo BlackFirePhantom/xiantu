@@ -219,9 +219,25 @@ function renderInventory(items) {
     items.forEach((item) => {
         const entry = document.createElement("div");
         entry.className = "item-entry";
-        entry.innerHTML = `<span><span class="item-name">${item.name}</span><span class="item-count">x${item.count}</span></span>`;
+        // 特殊物品显示操作按钮
+        let actionHtml = "";
+        if (item.id.startsWith("map_") && item.id !== "map_compass") {
+            actionHtml = `<button class="btn btn-sm btn-map-action" onclick="socket.emit('use_map',{item:'${item.id}'})">寻宝</button>`;
+            // 检查是否有罗盘可升级
+            const hasCompass = (gameState.inventory || []).find(i => i.id === "map_compass");
+            if (hasCompass && item.id !== "map_legend") {
+                actionHtml += `<button class="btn btn-sm btn-compass-action" onclick="socket.emit('upgrade_map',{item:'${item.id}'})">罗盘升级</button>`;
+            }
+        }
+        if (item.id.startsWith("frag_")) {
+            const group = item.id.replace(/_\d+$/, "").replace("frag_", "");
+            actionHtml = `<button class="btn btn-sm btn-frag-action" onclick="socket.emit('combine_fragments',{group:'${group}'})">合成功法</button>`;
+        }
+        entry.innerHTML = `<span><span class="item-name">${item.name}</span><span class="item-count">x${item.count}</span></span>${actionHtml}`;
         entry.title = item.desc;
-        entry.onclick = () => socket.emit("use_item", { item: item.id });
+        if (!actionHtml) {
+            entry.onclick = () => socket.emit("use_item", { item: item.id });
+        }
         div.appendChild(entry);
     });
 }
@@ -272,6 +288,11 @@ function renderShop() {
         { id: "pet_feed",      name: "灵兽饲料",   desc: "灵宠经验+10",       price: 15,   cat: "灵宠" },
         { id: "pet_feed_good", name: "高级灵兽粮", desc: "灵宠经验+50",       price: 80,   cat: "灵宠" },
         { id: "pet_feed_best", name: "万灵精华",   desc: "灵宠经验+200",      price: 350,  cat: "灵宠" },
+        // 藏宝图
+        { id: "map_common",    name: "残破藏宝图", desc: "一档宝藏",         price: 60,   cat: "藏宝图" },
+        { id: "map_rare",      name: "完整藏宝图", desc: "二档宝藏",         price: 250,  cat: "藏宝图" },
+        { id: "map_legend",    name: "上古藏宝图", desc: "三档宝藏",         price: 800,  cat: "藏宝图" },
+        { id: "map_compass",   name: "寻宝罗盘",   desc: "提升藏宝图品质",   price: 150,  cat: "藏宝图" },
     ];
     const div = document.getElementById("shop-list");
     div.innerHTML = "";

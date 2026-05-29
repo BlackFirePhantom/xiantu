@@ -15,7 +15,8 @@ from models import (
     set_character_inventory, get_leaderboard,
 )
 from game_data import (
-    LOCATIONS, MONSTERS, ITEMS, DROP_TABLE, PET_EGG_MONSTER_DROPS, EXP_PER_LEVEL, MAX_LEVEL,
+    LOCATIONS, MONSTERS, ITEMS, DROP_TABLE, PET_EGG_MONSTER_DROPS, MAP_MONSTER_DROPS,
+    TREASURE_TABLES, FRAGMENT_RECIPES, EXP_PER_LEVEL, MAX_LEVEL,
     BREAKTHROUGH_CHANCE, REALMS, SPIRIT_ROOTS, TECHNIQUES, MERIDIANS,
     RECIPES, FORTUNE_EVENTS, SURPRISE_EVENTS, ELEMENT_COUNTER,
     FORGE_RECIPES, FORGE_REALM_BONUS_PER_LV,
@@ -956,6 +957,11 @@ def handle_fight():
             for item_id, chance in PET_EGG_MONSTER_DROPS[monster_id]:
                 if random.random() < chance:
                     drops.append(item_id)
+        # 藏宝图掉落
+        if monster_id in MAP_MONSTER_DROPS:
+            for item_id, chance in MAP_MONSTER_DROPS[monster_id]:
+                if random.random() < chance:
+                    drops.append(item_id)
         # 战斗突发事件掉落加成
         for evt in SURPRISE_EVENTS:
             if evt["trigger"] == "fight" and evt.get("effect") == "bonus_drop":
@@ -1238,6 +1244,15 @@ def handle_use_item(data):
         return
     if item["type"] == "pet_food":
         emit("game_msg", {"text": "灵兽饲料请在灵宠面板中喂养。", "type": "info"})
+        return
+    if item["type"] == "treasure_map":
+        handle_use_map({"item": item_id})
+        return
+    if item["type"] == "map_upgrade":
+        emit("game_msg", {"text": "寻宝罗盘请在储物袋中对藏宝图使用。", "type": "info"})
+        return
+    if item["type"] == "technique_fragment":
+        handle_combine_fragments({"group": item["fragment_group"]})
         return
 
     if item["type"] == "consumable":
@@ -1553,6 +1568,187 @@ def handle_deactivate_pet():
     if not char: return
     update_character(session["user_id"], active_pet=None)
     emit("game_msg", {"text": "你收回了出战灵宠。", "type": "equip"})
+    handle_get_state()
+
+
+# ═══════════════ 藏宝图系统 ═══════════════
+
+@socketio.on("use_map")
+def handle_use_map(data):
+    """使用藏宝图寻宝"""
+    if "user_id" not in session: return
+    char = get_character(session["user_id"])
+    if not char: return
+    item_id = data.get("item")
+    if not item_id: return
+    item = lookup_item(item_id)
+    if not item or item.get("type") != "treasure_map":
+        return
+
+    inv = get_character_inventory(session["user_id"])
+    if inv.get(item_id, 0) <= 0:
+        emit("game_msg", {"text": "你没有这张藏宝图。", "type": "error"})
+        return
+
+    inv[item_id] -= 1
+    if inv[item_id] <= 0: del inv[item_id]
+
+    tier = item["map_tier"]
+    table = TREASURE_TABLES[tier]
+    tier_names = {1: "残破", 2: "完整", 3: "上古"}
+    log_lines = [f"你展开{tier_names[tier]}藏宝图，循着标记的方向前行……"]
+
+    # 战斗判定
+    fought = False
+    if random.random() < table["combat_chance"]:
+        monster_id = random.choice(table["combat_monsters"])
+        monster = spawn_monster(monster_id, player_level=char["level"])
+        log_lines.append(f"突然！一只{monster['name']}（{realm_name(monster['level'])}）从暗处扑出，守护宝藏！")
+        # 简化战斗
+        stats = get_full_stats(char)
+        player_hp = char["hp"]
+        monster_hp = monster["hp"]
+        rnd = 0
+        while player_hp > 0 and monster_hp > 0:
+            rnd += 1
+            p_dmg = max(1, stats["atk"] - monster["def"] + random.randint(-2, 3))
+            monster_hp -= p_dmg
+            log_lines.append(f"[第{rnd}回合] {fmt_attack(monster['name'])}，造成 {p_dmg} 点伤害。")
+            if monster_hp <= 0:
+                log_lines.append(f"{monster['name']}倒下了！你继续向宝藏前进。")
+                break
+            m_dmg = max(1, monster["atk"] - stats["def"] + random.randint(-2, 3))
+            player_hp -= m_dmg
+            log_lines.append(f"[第{rnd}回合] {fmt_monster_attack(monster['name'])}，受到 {m_dmg} 点伤害。")
+        fought = True
+        if player_hp <= 0:
+            log_lines.append("你不敌守宝妖兽，藏宝图在战斗中损毁……")
+            update_character(session["user_id"], hp=max(1, stats["max_hp"] // 3),
+                             gold=max(0, char["gold"] - 20), deaths=char["deaths"] + 1)
+            set_character_inventory(session["user_id"], inv)
+            emit("fight_log", {"log": log_lines, "won": False})
+            handle_get_state()
+            return
+        # 更新战斗后的HP
+        update_character(session["user_id"], hp=player_hp)
+        char = get_character(session["user_id"])
+
+    # 获得奖励
+    gold_gain = random.randint(*table["gold_range"])
+    exp_gain = random.randint(*table["exp_range"])
+    log_lines.append(f"你找到了宝藏！获得 {gold_gain} 灵石、{exp_gain} 修为。")
+
+    item_count = random.randint(*table["item_count"])
+    rewards = []
+    for _ in range(item_count):
+        r = random.random()
+        cum = 0
+        for iid, chance in table["item_pool"]:
+            cum += chance
+            if r < cum:
+                rewards.append(iid)
+                break
+
+    # 功法残卷
+    if random.random() < table.get("fragment_chance", 0):
+        frag_pool = table.get("fragment_pool", [])
+        if frag_pool:
+            frag = random.choice(frag_pool)
+            rewards.append(frag)
+
+    for iid in rewards:
+        inv[iid] = inv.get(iid, 0) + 1
+        log_lines.append(f"获得【{ITEMS[iid]['name']}】！")
+
+    set_character_inventory(session["user_id"], inv)
+    update_character(session["user_id"], exp=char["exp"] + exp_gain, gold=char["gold"] + gold_gain)
+
+    emit("fight_log", {"log": log_lines, "won": True})
+    handle_get_state()
+
+
+@socketio.on("upgrade_map")
+def handle_upgrade_map(data):
+    """使用寻宝罗盘升级藏宝图"""
+    if "user_id" not in session: return
+    char = get_character(session["user_id"])
+    if not char: return
+    item_id = data.get("item")
+    if not item_id: return
+    item = lookup_item(item_id)
+    if not item or item.get("type") != "treasure_map":
+        emit("game_msg", {"text": "只能对藏宝图使用。", "type": "error"})
+        return
+    if item["map_tier"] >= 3:
+        emit("game_msg", {"text": "已经是最高品质的藏宝图了。", "type": "error"})
+        return
+
+    inv = get_character_inventory(session["user_id"])
+    if inv.get("map_compass", 0) <= 0:
+        emit("game_msg", {"text": "你没有寻宝罗盘。", "type": "error"})
+        return
+    if inv.get(item_id, 0) <= 0:
+        emit("game_msg", {"text": "你没有这张藏宝图。", "type": "error"})
+        return
+
+    # 升级
+    new_tier = item["map_tier"] + 1
+    new_map_id = {2: "map_rare", 3: "map_legend"}[new_tier]
+    inv[item_id] -= 1
+    if inv[item_id] <= 0: del inv[item_id]
+    inv["map_compass"] -= 1
+    if inv["map_compass"] <= 0: del inv["map_compass"]
+    inv[new_map_id] = inv.get(new_map_id, 0) + 1
+    set_character_inventory(session["user_id"], inv)
+
+    tier_names = {2: "完整藏宝图", 3: "上古藏宝图"}
+    emit("game_msg", {"text": f"寻宝罗盘灵光闪烁，藏宝图品质提升！获得【{tier_names[new_tier]}】！", "type": "buff"})
+    handle_get_state()
+
+
+@socketio.on("combine_fragments")
+def handle_combine_fragments(data):
+    """合成功法残卷"""
+    if "user_id" not in session: return
+    char = get_character(session["user_id"])
+    if not char: return
+    group = data.get("group")
+    if not group or group not in FRAGMENT_RECIPES:
+        return
+
+    technique_id, fragments = FRAGMENT_RECIPES[group]
+    if technique_id in TECHNIQUES:
+        t = TECHNIQUES[technique_id]
+        learned = json.loads(char["techniques"]) if char["techniques"] else []
+        if technique_id in learned:
+            emit("game_msg", {"text": f"你已经领悟了【{t['name']}】。", "type": "error"})
+            return
+        if char["level"] < t["req_realm"]:
+            emit("game_msg", {"text": f"境界不足，需要{realm_name(t['req_realm'])}才能领悟。", "type": "error"})
+            return
+
+    inv = get_character_inventory(session["user_id"])
+    for frag_id in fragments:
+        if inv.get(frag_id, 0) <= 0:
+            frag_name = ITEMS.get(frag_id, {}).get("name", frag_id)
+            emit("game_msg", {"text": f"缺少【{frag_name}】，无法合成。", "type": "error"})
+            return
+
+    # 扣除残卷
+    for frag_id in fragments:
+        inv[frag_id] -= 1
+        if inv[frag_id] <= 0: del inv[frag_id]
+    set_character_inventory(session["user_id"], inv)
+
+    # 学习功法
+    learned = json.loads(char["techniques"]) if char["techniques"] else []
+    if technique_id not in learned:
+        learned.append(technique_id)
+        update_character(session["user_id"], techniques=json.dumps(learned))
+
+    t = TECHNIQUES.get(technique_id, {})
+    names = "、".join([ITEMS.get(f,{}).get("name","?") for f in fragments])
+    emit("game_msg", {"text": f"你将{names}拼合在一起，残卷上的文字忽然流转起来——领悟了完整功法【{t.get('name', technique_id)}】（{t.get('tier', '')}）！", "type": "buff"})
     handle_get_state()
 
 

@@ -486,6 +486,14 @@ a:hover { color: #a8d8ea; text-decoration: underline; }
 /* ===== 宗门信息 ===== */
 .sect-info-box { padding: 6px 0; font-size: 12px; }
 
+/* ===== 藏宝图按钮 ===== */
+.btn-map-action { background: #2a2a18; border-color: #8a7a3a; color: #e0d0a0; font-size: 11px; padding: 2px 8px; margin-left: 6px; }
+.btn-map-action:hover { background: #3a3a22; }
+.btn-compass-action { background: #1a2a3a; border-color: #4a7a9a; color: #a0c8e0; font-size: 11px; padding: 2px 8px; margin-left: 4px; }
+.btn-compass-action:hover { background: #243444; }
+.btn-frag-action { background: #2a1a3a; border-color: #7a5a9a; color: #c0a0e0; font-size: 11px; padding: 2px 8px; margin-left: 6px; }
+.btn-frag-action:hover { background: #342444; }
+
 /* ===== 响应式 ===== */
 @media (max-width: 900px) {
     .game-layout {

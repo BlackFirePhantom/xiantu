@@ -484,6 +484,78 @@ ITEMS = {
     "pet_feed":      {"name": "灵兽饲料",     "desc": "给灵宠提供10点成长经验", "type": "pet_food", "pet_exp": 10, "price": 15},
     "pet_feed_good": {"name": "高级灵兽粮",   "desc": "给灵宠提供50点成长经验", "type": "pet_food", "pet_exp": 50, "price": 80},
     "pet_feed_best": {"name": "万灵精华",     "desc": "给灵宠提供200点成长经验", "type": "pet_food", "pet_exp": 200, "price": 350},
+    # ── 藏宝图 ──
+    "map_common":    {"name": "残破藏宝图",   "desc": "一卷破旧的地图，标记着某处宝藏", "type": "treasure_map", "map_tier": 1, "price": 60},
+    "map_rare":      {"name": "完整藏宝图",   "desc": "保存完好的古图，灵气隐现",       "type": "treasure_map", "map_tier": 2, "price": 250},
+    "map_legend":    {"name": "上古藏宝图",   "desc": "金色丝帛所制，铭刻上古符文",     "type": "treasure_map", "map_tier": 3, "price": 800},
+    "map_compass":   {"name": "寻宝罗盘",     "desc": "可提升藏宝图品质一档",           "type": "map_upgrade", "price": 150},
+    # ── 功法残卷（集齐合成完整功法）──
+    "frag_xuantian_1": {"name": "玄天功·上卷", "desc": "玄天功上卷残篇，集齐上下卷可领悟完整功法", "type": "technique_fragment", "fragment_group": "xuantian", "fragment_index": 1, "fragment_total": 2, "price": 0},
+    "frag_xuantian_2": {"name": "玄天功·下卷", "desc": "玄天功下卷残篇，集齐上下卷可领悟完整功法", "type": "technique_fragment", "fragment_group": "xuantian", "fragment_index": 2, "fragment_total": 2, "price": 0},
+    "frag_hundun_1":   {"name": "混沌诀·卷一", "desc": "混沌诀第一卷，集齐三卷可领悟完整功法",     "type": "technique_fragment", "fragment_group": "hundun", "fragment_index": 1, "fragment_total": 3, "price": 0},
+    "frag_hundun_2":   {"name": "混沌诀·卷二", "desc": "混沌诀第二卷，集齐三卷可领悟完整功法",     "type": "technique_fragment", "fragment_group": "hundun", "fragment_index": 2, "fragment_total": 3, "price": 0},
+    "frag_hundun_3":   {"name": "混沌诀·卷三", "desc": "混沌诀第三卷，集齐三卷可领悟完整功法",     "type": "technique_fragment", "fragment_group": "hundun", "fragment_index": 3, "fragment_total": 3, "price": 0},
+    "frag_tianmo_1":   {"name": "天魔功·上篇", "desc": "天魔功上篇，集齐上下篇可领悟完整功法",     "type": "technique_fragment", "fragment_group": "tianmo", "fragment_index": 1, "fragment_total": 2, "price": 0},
+    "frag_tianmo_2":   {"name": "天魔功·下篇", "desc": "天魔功下篇，集齐上下篇可领悟完整功法",     "type": "technique_fragment", "fragment_group": "tianmo", "fragment_index": 2, "fragment_total": 2, "price": 0},
+    "frag_jiuyang_1":  {"name": "九阳功·太阳卷", "desc": "九阳功太阳卷，集齐三卷可领悟完整功法",   "type": "technique_fragment", "fragment_group": "jiuyang", "fragment_index": 1, "fragment_total": 3, "price": 0},
+    "frag_jiuyang_2":  {"name": "九阳功·少阳卷", "desc": "九阳功少阳卷，集齐三卷可领悟完整功法",   "type": "technique_fragment", "fragment_group": "jiuyang", "fragment_index": 2, "fragment_total": 3, "price": 0},
+    "frag_jiuyang_3":  {"name": "九阳功·纯阳卷", "desc": "九阳功纯阳卷，集齐三卷可领悟完整功法",   "type": "technique_fragment", "fragment_group": "jiuyang", "fragment_index": 3, "fragment_total": 3, "price": 0},
+}
+
+# ═══════════════ 藏宝图系统 ═══════════════
+# 残卷合成配方：group_id -> (technique_id, [fragment_item_ids])
+FRAGMENT_RECIPES = {
+    "xuantian":  ("xuantian_gong",  ["frag_xuantian_1", "frag_xuantian_2"]),
+    "hundun":    ("hundun_jue",     ["frag_hundun_1", "frag_hundun_2", "frag_hundun_3"]),
+    "tianmo":    ("tianmo_gong",    ["frag_tianmo_1", "frag_tianmo_2"]),
+    "jiuyang":   ("jiuyang_gong",   ["frag_jiuyang_1", "frag_jiuyang_2", "frag_jiuyang_3"]),
+}
+
+# 藏宝图三档奖励表
+# tier 1 -> 普通材料 + 少量经验/灵石
+# tier 2 -> 稀有材料 + 功法残卷(低阶) + 中等经验/灵石
+# tier 3 -> 传说材料 + 功法残卷(高阶) + 大量经验/灵石 + 稀有丹药
+TREASURE_TABLES = {
+    1: {
+        "gold_range": (30, 100),
+        "exp_range": (30, 80),
+        "item_pool": [
+            ("huiqi_dan", 0.5), ("lingcao", 0.4), ("hantie_kuang", 0.3),
+            ("yaogu", 0.3), ("yaopimo", 0.2), ("pet_feed", 0.2),
+        ],
+        "item_count": (2, 3),
+        "fragment_chance": 0.0,
+        "combat_chance": 0.2,
+        "combat_monsters": ["green_wolf", "spirit_slime", "rogue_cultivator", "blood_bat"],
+    },
+    2: {
+        "gold_range": (100, 300),
+        "exp_range": (80, 200),
+        "item_pool": [
+            ("huichun_dan", 0.4), ("peiyuan_dan", 0.3), ("bingling_cao", 0.3),
+            ("xuanjin_shi", 0.3), ("yaodan", 0.3), ("egg_common", 0.1),
+            ("liliang_fulu", 0.1), ("huti_fulu", 0.1), ("pet_feed_good", 0.15),
+        ],
+        "item_count": (2, 4),
+        "fragment_chance": 0.35,
+        "fragment_pool": ["frag_xuantian_1","frag_xuantian_2","frag_tianmo_1","frag_tianmo_2"],
+        "combat_chance": 0.3,
+        "combat_monsters": ["wolf_king", "cave_troll_yao", "stone_bear", "mine_demon_chief"],
+    },
+    3: {
+        "gold_range": (300, 800),
+        "exp_range": (200, 500),
+        "item_pool": [
+            ("juling_dan", 0.3), ("wudao_dan", 0.2), ("tianwai_yuntie", 0.3),
+            ("zijin_kuang", 0.25), ("egg_rare", 0.15), ("egg_legend", 0.03),
+            ("pojing_dan", 0.1), ("map_compass", 0.1), ("pet_feed_best", 0.1),
+        ],
+        "item_count": (3, 5),
+        "fragment_chance": 0.5,
+        "fragment_pool": ["frag_hundun_1","frag_hundun_2","frag_hundun_3","frag_jiuyang_1","frag_jiuyang_2","frag_jiuyang_3"],
+        "combat_chance": 0.4,
+        "combat_monsters": ["demonic_cultivator", "shadow_demon", "flood_dragon"],
+    },
 }
 
 # 掉落表：monster_id -> [(item_id, 概率)]
@@ -525,6 +597,17 @@ PET_EGG_MONSTER_DROPS = {
     "demonic_cultivator":[("egg_rare", 0.05)],
     "shadow_demon":      [("egg_rare", 0.06), ("egg_legend", 0.01)],
     "flood_dragon":      [("egg_rare", 0.10), ("egg_legend", 0.03)],
+}
+
+# 部分怪物额外掉落藏宝图
+MAP_MONSTER_DROPS = {
+    "rogue_cultivator":  [("map_common", 0.06)],
+    "wolf_king":         [("map_common", 0.08)],
+    "cave_troll_yao":    [("map_common", 0.10), ("map_rare", 0.03)],
+    "mine_demon_chief":  [("map_rare", 0.06)],
+    "demonic_cultivator":[("map_rare", 0.08), ("map_legend", 0.02)],
+    "shadow_demon":      [("map_rare", 0.10), ("map_legend", 0.03)],
+    "flood_dragon":      [("map_rare", 0.12), ("map_legend", 0.05)],
 }
 
 # ═══════════════ 怪物生成 ═══════════════
