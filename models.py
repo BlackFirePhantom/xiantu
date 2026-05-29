@@ -60,6 +60,8 @@ def init_db():
                 spirit_root TEXT DEFAULT NULL,
                 techniques TEXT DEFAULT '[]',
                 open_meridians TEXT DEFAULT '[]',
+                pets TEXT DEFAULT '[]',
+                active_pet TEXT DEFAULT NULL,
                 last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (user_id) REFERENCES users(id)
             );
@@ -72,6 +74,8 @@ def init_db():
             ("last_active", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
             ("accessory", "TEXT DEFAULT NULL"),
             ("combat_buff", "INTEGER DEFAULT 0"),
+            ("pets", "TEXT DEFAULT '[]'"),
+            ("active_pet", "TEXT DEFAULT NULL"),
         ]:
             if not _column_exists(conn, "characters", col):
                 conn.execute(f"ALTER TABLE characters ADD COLUMN {col} {col_def}")

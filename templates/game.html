@@ -72,6 +72,7 @@
                 <button class="btn btn-meridian" onclick="showPanel('meridians')">经脉</button>
                 <button class="btn btn-alchemy" onclick="showPanel('alchemy')">炼丹</button>
                 <button class="btn btn-forge" onclick="showPanel('forge')">炼器</button>
+                <button class="btn btn-pet" onclick="showPanel('pets')">灵宠</button>
                 <button class="btn btn-leaderboard" onclick="showLeaderboard()">天骄榜</button>
             </div>
 
@@ -147,6 +148,16 @@
             <p class="forge-hint">收集妖兽材料和矿石，在此锻造法宝装备。每次锻造随机生成前缀+材料+后缀组合，属性各不相同。品阶越高，成功率越低。境界超过要求可提升成功率。</p>
             <div id="forge-body"></div>
             <button class="btn" onclick="closePanel('forge')">关闭</button>
+        </div>
+    </div>
+
+    <!-- 灵宠面板 -->
+    <div id="pet-modal" class="modal" style="display:none;">
+        <div class="modal-content" style="width:520px;">
+            <h3>灵宠</h3>
+            <p class="forge-hint">孵化灵兽蛋获得灵宠，喂养灵兽饲料提升等级。灵宠出战时为你提供属性加成。</p>
+            <div id="pet-body"></div>
+            <button class="btn" onclick="closePanel('pet')">关闭</button>
         </div>
     </div>
 

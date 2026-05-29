@@ -15,11 +15,13 @@ from models import (
     set_character_inventory, get_leaderboard,
 )
 from game_data import (
-    LOCATIONS, MONSTERS, ITEMS, DROP_TABLE, EXP_PER_LEVEL, MAX_LEVEL,
+    LOCATIONS, MONSTERS, ITEMS, DROP_TABLE, PET_EGG_MONSTER_DROPS, EXP_PER_LEVEL, MAX_LEVEL,
     BREAKTHROUGH_CHANCE, REALMS, SPIRIT_ROOTS, TECHNIQUES, MERIDIANS,
     RECIPES, FORTUNE_EVENTS, SURPRISE_EVENTS, ELEMENT_COUNTER,
     FORGE_RECIPES, FORGE_REALM_BONUS_PER_LV,
+    PET_SPECIES, PET_EGG_TIERS, PET_BATTLE_RATIO, PET_EXP_PER_LEVEL, PET_MAX_LEVEL,
     realm_name, spawn_monster, roll_spirit_root, generate_equip, lookup_item,
+    hatch_egg, get_pet_stats, get_pet_exp_needed,
     IDLE_EXP_PER_SEC, IDLE_MAX_HOURS,
 )
 
@@ -151,6 +153,18 @@ def get_full_stats(char):
             max_hp += m["bonus_hp"]
             atk += m["bonus_atk"]
             defn += m["bonus_def"]
+
+    # 灵宠战斗加成
+    active_pet_id = char["active_pet"]
+    if active_pet_id:
+        pets = json.loads(char["pets"]) if char["pets"] else []
+        for pet in pets:
+            if pet["id"] == active_pet_id:
+                ps = get_pet_stats(pet)
+                max_hp += int(ps["hp"] * PET_BATTLE_RATIO)
+                atk += int(ps["atk"] * PET_BATTLE_RATIO)
+                defn += int(ps["def"] * PET_BATTLE_RATIO)
+                break
 
     return {"atk": atk, "def": defn, "max_hp": max_hp}
 
@@ -376,6 +390,7 @@ def handle_get_state():
         },
         "inventory": inv_display,
         "equipment": equip_info,
+        "pets": get_pet_display_info(char),
         "online_count": len(online_users),
         "is_afk": session.get("username", "") in afk_players,
     })
@@ -788,6 +803,40 @@ def process_fortune_outcome(char, outcome):
     elif outcome == "fight_bandit" or outcome == "fight_demon_boss":
         handle_fight()
 
+    elif outcome == "reward_egg_common":
+        inv = get_character_inventory(uid)
+        inv["egg_common"] = inv.get("egg_common", 0) + 1
+        set_character_inventory(uid, inv)
+        emit("game_msg", {"text": "你小心翼翼地将灵兽蛋收入储物袋。回去后可以尝试孵化。", "type": "shop"})
+
+    elif outcome == "reward_egg_rare":
+        inv = get_character_inventory(uid)
+        inv["egg_rare"] = inv.get("egg_rare", 0) + 1
+        set_character_inventory(uid, inv)
+        emit("game_msg", {"text": "你将这枚灵气氤氲的灵兽蛋收入囊中，心中一阵激动。", "type": "shop"})
+
+    elif outcome == "reward_egg_rare_or_fight":
+        if random.random() < 0.4:
+            inv = get_character_inventory(uid)
+            inv["egg_rare"] = inv.get("egg_rare", 0) + 1
+            set_character_inventory(uid, inv)
+            emit("game_msg", {"text": "母兽归来，见你并无恶意，竟将一枚灵兽蛋推向你——它似乎在托付自己的孩子。", "type": "shop"})
+        else:
+            emit("game_msg", {"text": "母兽归来，见你站在洞口，怒吼一声扑了过来！", "type": "error"})
+            handle_fight()
+
+    elif outcome == "reward_egg_legend_or_rare":
+        if random.random() < 0.3:
+            inv = get_character_inventory(uid)
+            inv["egg_legend"] = inv.get("egg_legend", 0) + 1
+            set_character_inventory(uid, inv)
+            emit("game_msg", {"text": "灵力探入蛋壳，你感应到一股磅礴的生命力——这竟是一枚传说级灵兽蛋！", "type": "buff"})
+        else:
+            inv = get_character_inventory(uid)
+            inv["egg_rare"] = inv.get("egg_rare", 0) + 1
+            set_character_inventory(uid, inv)
+            emit("game_msg", {"text": "灵力探查后确认这是一枚品质不错的灵兽蛋，收入囊中。", "type": "shop"})
+
     else:
         emit("game_msg", {"text": "你平静地离开了。", "type": "info"})
 
@@ -886,6 +935,11 @@ def handle_fight():
         drops = []
         if monster_id in DROP_TABLE:
             for item_id, chance in DROP_TABLE[monster_id]:
+                if random.random() < chance:
+                    drops.append(item_id)
+        # 灵宠蛋掉落
+        if monster_id in PET_EGG_MONSTER_DROPS:
+            for item_id, chance in PET_EGG_MONSTER_DROPS[monster_id]:
                 if random.random() < chance:
                     drops.append(item_id)
         # 战斗突发事件掉落加成
@@ -1161,6 +1215,12 @@ def handle_use_item(data):
     if item["type"] == "material":
         emit("game_msg", {"text": "灵草是炼丹材料，不可直接使用。", "type": "info"})
         return
+    if item["type"] == "pet_egg":
+        handle_hatch_egg({"item": item_id})
+        return
+    if item["type"] == "pet_food":
+        emit("game_msg", {"text": "灵兽饲料请在灵宠面板中喂养。", "type": "info"})
+        return
 
     if item["type"] == "consumable":
         if item["effect"] == "heal":
@@ -1326,6 +1386,156 @@ def handle_get_meridians():
                           "req_realm": realm_name(m["req_realm"]), "status": status,
                           "bonus": f"气血+{m['bonus_hp']} 攻击+{m['bonus_atk']} 防御+{m['bonus_def']}"})
     emit("meridians_list", {"data": available, "opened": opened})
+
+
+# ═══════════════ 灵宠系统 ═══════════════
+
+def get_pet_display_info(char):
+    """获取角色所有灵宠的展示信息"""
+    pets = json.loads(char["pets"]) if char["pets"] else []
+    active_pet_id = char["active_pet"]
+    result = []
+    for pet in pets:
+        species = PET_SPECIES.get(pet["species_id"], {})
+        stats = get_pet_stats(pet)
+        needed = get_pet_exp_needed(pet["level"])
+        result.append({
+            "id": pet["id"],
+            "species_id": pet["species_id"],
+            "name": species.get("name", "未知"),
+            "rarity": species.get("rarity", "common"),
+            "element": species.get("element"),
+            "desc": species.get("desc", ""),
+            "level": pet["level"],
+            "exp": pet["exp"],
+            "exp_needed": needed,
+            "hp": stats["hp"],
+            "atk": stats["atk"],
+            "def": stats["def"],
+            "is_active": pet["id"] == active_pet_id,
+        })
+    return result
+
+
+@socketio.on("hatch_egg")
+def handle_hatch_egg(data):
+    if "user_id" not in session: return
+    char = get_character(session["user_id"])
+    if not char: return
+    item_id = data.get("item")
+    if not item_id: return
+    item = lookup_item(item_id)
+    if not item or item.get("type") != "pet_egg":
+        return
+
+    inv = get_character_inventory(session["user_id"])
+    if inv.get(item_id, 0) <= 0:
+        emit("game_msg", {"text": "你没有这枚灵兽蛋。", "type": "error"})
+        return
+
+    inv[item_id] -= 1
+    if inv[item_id] <= 0: del inv[item_id]
+    set_character_inventory(session["user_id"], inv)
+
+    egg_tier = item["egg_tier"]
+    species_id, species = hatch_egg(egg_tier)
+
+    import uuid
+    pet_id = str(uuid.uuid4())[:8]
+    new_pet = {"id": pet_id, "species_id": species_id, "level": 1, "exp": 0}
+
+    pets = json.loads(char["pets"]) if char["pets"] else []
+    pets.append(new_pet)
+    update_character(session["user_id"], pets=json.dumps(pets))
+
+    rarity_names = {"common": "普通", "rare": "稀有", "legend": "传说"}
+    emit("game_msg", {
+        "text": f"你将灵力注入灵兽蛋，蛋壳裂开，一只【{species['name']}】（{rarity_names[species['rarity']]}）破壳而出！它用小脑袋蹭了蹭你的手心。",
+        "type": "heal",
+    })
+    handle_get_state()
+
+
+@socketio.on("feed_pet")
+def handle_feed_pet(data):
+    if "user_id" not in session: return
+    char = get_character(session["user_id"])
+    if not char: return
+    pet_id = data.get("pet_id")
+    item_id = data.get("item")
+    if not pet_id or not item_id: return
+    item = lookup_item(item_id)
+    if not item or item.get("type") != "pet_food":
+        return
+
+    inv = get_character_inventory(session["user_id"])
+    if inv.get(item_id, 0) <= 0:
+        emit("game_msg", {"text": "你没有这个食物。", "type": "error"})
+        return
+
+    pets = json.loads(char["pets"]) if char["pets"] else []
+    target_pet = None
+    for pet in pets:
+        if pet["id"] == pet_id:
+            target_pet = pet
+            break
+    if not target_pet:
+        emit("game_msg", {"text": "未找到该灵宠。", "type": "error"})
+        return
+
+    if target_pet["level"] >= PET_MAX_LEVEL:
+        emit("game_msg", {"text": "灵宠已达最高等级。", "type": "error"})
+        return
+
+    inv[item_id] -= 1
+    if inv[item_id] <= 0: del inv[item_id]
+    set_character_inventory(session["user_id"], inv)
+
+    target_pet["exp"] += item["pet_exp"]
+    species = PET_SPECIES.get(target_pet["species_id"], {})
+    level_up_msgs = []
+    while target_pet["level"] < PET_MAX_LEVEL:
+        needed = get_pet_exp_needed(target_pet["level"])
+        if target_pet["exp"] >= needed:
+            target_pet["exp"] -= needed
+            target_pet["level"] += 1
+            level_up_msgs.append(f"【{species.get('name', '灵宠')}】升到了 Lv.{target_pet['level']}！")
+        else:
+            break
+
+    update_character(session["user_id"], pets=json.dumps(pets))
+    emit("game_msg", {"text": f"你喂了【{species.get('name', '灵宠')}】一份{item['name']}，成长经验+{item['pet_exp']}。", "type": "heal"})
+    for msg in level_up_msgs:
+        emit("game_msg", {"text": msg, "type": "buff"})
+    handle_get_state()
+
+
+@socketio.on("activate_pet")
+def handle_activate_pet(data):
+    if "user_id" not in session: return
+    char = get_character(session["user_id"])
+    if not char: return
+    pet_id = data.get("pet_id")
+    if not pet_id: return
+    pets = json.loads(char["pets"]) if char["pets"] else []
+    found = any(p["id"] == pet_id for p in pets)
+    if not found:
+        emit("game_msg", {"text": "未找到该灵宠。", "type": "error"})
+        return
+    update_character(session["user_id"], active_pet=pet_id)
+    species = PET_SPECIES.get(next(p["species_id"] for p in pets if p["id"] == pet_id), {})
+    emit("game_msg", {"text": f"你将【{species.get('name', '灵宠')}】设为出战灵宠。", "type": "equip"})
+    handle_get_state()
+
+
+@socketio.on("deactivate_pet")
+def handle_deactivate_pet():
+    if "user_id" not in session: return
+    char = get_character(session["user_id"])
+    if not char: return
+    update_character(session["user_id"], active_pet=None)
+    emit("game_msg", {"text": "你收回了出战灵宠。", "type": "equip"})
+    handle_get_state()
 
 
 # ═══════════════ 启动 ═══════════════

@@ -432,6 +432,27 @@ a:hover { color: #a8d8ea; text-decoration: underline; }
 .forge-row2 { color: #7a8a7a; font-size: 12px; margin-top: 4px; }
 .forge-row3 { color: #5a7a6a; font-size: 11px; margin-top: 2px; }
 
+/* ===== 灵宠面板 ===== */
+.btn-pet { background: #2a2030; border-color: #8a6aaa; color: #d0b0e0; }
+.btn-pet:hover { background: #342a3a; }
+.btn-feed { background: #2a3a2a; border-color: #5a8a5a; color: #b0e0b0; margin-right: 4px; }
+.btn-feed:hover { background: #3a4a3a; }
+
+.pet-entry {
+    background: #0f1519;
+    border: 1px solid #1e2a22;
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-bottom: 6px;
+}
+.pet-entry.active-pet { border-color: #5a3a8a; background: #141820; }
+.pet-row1 { display: flex; align-items: center; gap: 10px; }
+.pet-name { font-weight: bold; font-size: 14px; }
+.pet-rarity { font-size: 11px; color: #6a8a7a; }
+.pet-level { font-size: 12px; color: #d4b870; margin-left: auto; font-weight: bold; }
+.pet-row2 { color: #6a8a7a; font-size: 12px; margin-top: 4px; }
+.pet-row3 { color: #5a7a6a; font-size: 11px; margin-top: 2px; }
+
 /* ===== 响应式 ===== */
 @media (max-width: 900px) {
     .game-layout {

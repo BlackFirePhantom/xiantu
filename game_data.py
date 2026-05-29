@@ -228,6 +228,129 @@ def _decode_gen_item(item_id):
     return item
 
 
+# ═══════════════ 灵宠系统 ═══════════════
+# 宠物蛋品质 -> (孵化出稀有/传说的概率加成)
+PET_EGG_TIERS = {
+    "common": {"name": "灵兽蛋", "desc": "普通灵兽蛋，有几率孵化出灵宠", "price": 80, "rare_bonus": 0, "legend_bonus": 0},
+    "rare":   {"name": "稀有灵兽蛋", "desc": "散发着微光的灵兽蛋，孵化稀有灵宠概率更高", "price": 300, "rare_bonus": 0.3, "legend_bonus": 0.05},
+    "legend": {"name": "传说灵兽蛋", "desc": "灵气氤氲的上古灵兽蛋，必定孵化出稀有以上灵宠", "price": 1000, "rare_bonus": 0.6, "legend_bonus": 0.2},
+}
+
+# 宠物种族定义
+# rarity: common / rare / legend
+# element: 金木水火土 or None
+# base_hp/atk/def: 1级基础属性
+# growth_hp/atk/def: 每级成长值
+PET_SPECIES = {
+    # ── 普通灵宠 ──
+    "spirit_fox":    {"name": "灵狐",   "rarity": "common", "element": None, "desc": "灵性极高的小狐狸，善于感应灵气",
+                      "base_hp": 20, "base_atk": 3, "base_def": 2, "growth_hp": 5, "growth_atk": 1, "growth_def": 1},
+    "green_wolf_pup":{"name": "青狼崽", "rarity": "common", "element": "木", "desc": "青狼幼崽，忠诚且好斗",
+                      "base_hp": 25, "base_atk": 4, "base_def": 2, "growth_hp": 6, "growth_atk": 2, "growth_def": 1},
+    "fire_rat_pup":  {"name": "火鼠崽", "rarity": "common", "element": "火", "desc": "浑身冒着小火苗的灵鼠",
+                      "base_hp": 15, "base_atk": 5, "base_def": 1, "growth_hp": 4, "growth_atk": 2, "growth_def": 1},
+    "stone_beetle":  {"name": "石甲虫", "rarity": "common", "element": "土", "desc": "壳硬如铁的小甲虫，防御力不俗",
+                      "base_hp": 30, "base_atk": 2, "base_def": 4, "growth_hp": 7, "growth_atk": 1, "growth_def": 2},
+    "spirit_slime_p":{"name": "灵液团", "rarity": "common", "element": "水", "desc": "一团跳动的灵液，憨态可掬",
+                      "base_hp": 22, "base_atk": 3, "base_def": 3, "growth_hp": 6, "growth_atk": 1, "growth_def": 2},
+
+    # ── 稀有灵宠 ──
+    "purple_eagle_pup":{"name": "紫云雏鹰", "rarity": "rare", "element": None, "desc": "紫云鹰幼崽，羽翼初展便有灵光流转",
+                        "base_hp": 40, "base_atk": 8, "base_def": 4, "growth_hp": 8, "growth_atk": 3, "growth_def": 2},
+    "ice_python":    {"name": "玄冰幼蟒", "rarity": "rare", "element": "水", "desc": "通体冰蓝的小蟒蛇，触之寒气逼人",
+                      "base_hp": 50, "base_atk": 6, "base_def": 6, "growth_hp": 10, "growth_atk": 2, "growth_def": 3},
+    "crimson_ape":   {"name": "赤火猿崽", "rarity": "rare", "element": "火", "desc": "浑身赤红的猿猴幼崽，力大无穷",
+                      "base_hp": 45, "base_atk": 9, "base_def": 4, "growth_hp": 9, "growth_atk": 3, "growth_def": 2},
+    "golden_turtle": {"name": "金甲龟",   "rarity": "rare", "element": "金", "desc": "龟壳上隐约有金色纹路的灵龟",
+                      "base_hp": 60, "base_atk": 5, "base_def": 8, "growth_hp": 12, "growth_atk": 2, "growth_def": 3},
+    "wind_swallow":  {"name": "风灵燕",   "rarity": "rare", "element": None, "desc": "速度极快的灵燕，飞行时留下残影",
+                      "base_hp": 35, "base_atk": 10, "base_def": 3, "growth_hp": 7, "growth_atk": 4, "growth_def": 1},
+
+    # ── 传说灵宠 ──
+    "nine_tail_fox": {"name": "九尾妖狐", "rarity": "legend", "element": "火", "desc": "上古血脉的九尾狐，灵焰焚天",
+                      "base_hp": 80, "base_atk": 15, "base_def": 8, "growth_hp": 14, "growth_atk": 5, "growth_def": 3},
+    "flood_dragon_pup":{"name": "幼蛟",   "rarity": "legend", "element": "水", "desc": "蛟龙幼崽，翻江倒海指日可待",
+                        "base_hp": 100, "base_atk": 12, "base_def": 10, "growth_hp": 16, "growth_atk": 4, "growth_def": 4},
+    "qilin_cub":     {"name": "麒麟幼崽", "rarity": "legend", "element": "土", "desc": "祥瑞之兽，得之天佑",
+                      "base_hp": 90, "base_atk": 14, "base_def": 12, "growth_hp": 15, "growth_atk": 4, "growth_def": 4},
+    "phoenix_chick": {"name": "凤凰雏鸟", "rarity": "legend", "element": "火", "desc": "浴火重生的神鸟后裔，涅槃之火永不熄灭",
+                      "base_hp": 70, "base_atk": 18, "base_def": 6, "growth_hp": 12, "growth_atk": 6, "growth_def": 2},
+    "thunder_qilin": {"name": "雷麒麟",   "rarity": "legend", "element": "金", "desc": "掌控天雷的上古神兽，万雷之主",
+                      "base_hp": 85, "base_atk": 16, "base_def": 10, "growth_hp": 14, "growth_atk": 5, "growth_def": 3},
+}
+
+# 按稀有度分组（用于孵化时随机选择）
+PET_BY_RARITY = {
+    "common": [sid for sid, s in PET_SPECIES.items() if s["rarity"] == "common"],
+    "rare":   [sid for sid, s in PET_SPECIES.items() if s["rarity"] == "rare"],
+    "legend": [sid for sid, s in PET_SPECIES.items() if s["rarity"] == "legend"],
+}
+
+# 宠物喂养食物（消耗品，给宠物增加经验）
+PET_FOOD = {
+    "pet_feed":      {"name": "灵兽饲料",   "desc": "给灵宠提供10点成长经验", "type": "pet_food", "pet_exp": 10, "price": 15},
+    "pet_feed_good": {"name": "高级灵兽粮", "desc": "给灵宠提供50点成长经验", "type": "pet_food", "pet_exp": 50, "price": 80},
+    "pet_feed_best": {"name": "万灵精华",   "desc": "给灵宠提供200点成长经验", "type": "pet_food", "pet_exp": 200, "price": 350},
+}
+
+# 宠物蛋掉落表：location_id -> [(egg_tier, chance)]
+PET_EGG_DROPS = {
+    "fallenwood_forest": [("common", 0.08)],
+    "luoxia_plains":     [("common", 0.06)],
+    "yaoshou_deepwood":  [("common", 0.10), ("rare", 0.03)],
+    "spirit_cave":       [("common", 0.08), ("rare", 0.04)],
+    "cangyun_mountain":  [("common", 0.06), ("rare", 0.05)],
+    "mine_depth":        [("rare", 0.06), ("legend", 0.01)],
+    "youming_altar":     [("rare", 0.08), ("legend", 0.02)],
+    "tribulation_peak":  [("rare", 0.10), ("legend", 0.05)],
+}
+
+# 宠物升级经验表（每级所需经验 = level * 20）
+PET_EXP_PER_LEVEL = 20
+PET_MAX_LEVEL = 30
+
+# 宠物对玩家战斗的属性加成比例（宠物属性 * 此比例 = 加给玩家的属性）
+PET_BATTLE_RATIO = 0.3
+
+
+def hatch_egg(egg_tier):
+    """孵化宠物蛋，返回 (species_id, species_dict)"""
+    tier_info = PET_EGG_TIERS[egg_tier]
+    roll = random.random()
+    legend_chance = 0.05 + tier_info["legend_bonus"]
+    rare_chance = 0.20 + tier_info["rare_bonus"]
+
+    if roll < legend_chance:
+        rarity = "legend"
+    elif roll < legend_chance + rare_chance:
+        rarity = "rare"
+    else:
+        rarity = "common"
+
+    pool = PET_BY_RARITY[rarity]
+    species_id = random.choice(pool)
+    return species_id, PET_SPECIES[species_id]
+
+
+def get_pet_stats(pet):
+    """计算宠物当前属性"""
+    species = PET_SPECIES.get(pet["species_id"])
+    if not species:
+        return {"hp": 0, "atk": 0, "def": 0}
+    lv = pet.get("level", 1)
+    return {
+        "hp": species["base_hp"] + species["growth_hp"] * (lv - 1),
+        "atk": species["base_atk"] + species["growth_atk"] * (lv - 1),
+        "def": species["base_def"] + species["growth_def"] * (lv - 1),
+    }
+
+
+def get_pet_exp_needed(level):
+    """宠物升级所需经验"""
+    if level >= PET_MAX_LEVEL:
+        return 999999
+    return level * PET_EXP_PER_LEVEL
+
 # ═══════════════ 地点 ═══════════════
 LOCATIONS = {
     "qingyun_town": {
@@ -353,6 +476,14 @@ ITEMS = {
     "cloth_robe":    {"name": "粗布道袍",     "desc": "凡器       防御+3",   "type": "equip", "slot": "armor", "def": 3,   "price": 35},
     "qingyu_peidai": {"name": "青玉佩",       "desc": "凡器       攻击+2 气血+10", "type": "equip", "slot": "accessory", "atk": 2, "bonus_hp": 10, "price": 80},
     "tongqian_hufu": {"name": "铜钱护符",     "desc": "凡器       防御+2 气血+10", "type": "equip", "slot": "accessory", "def": 2, "bonus_hp": 10, "price": 80},
+    # ── 灵宠蛋 ──
+    "egg_common":    {"name": "灵兽蛋",       "desc": "普通灵兽蛋，有几率孵化出灵宠",             "type": "pet_egg", "egg_tier": "common", "price": 80},
+    "egg_rare":      {"name": "稀有灵兽蛋",   "desc": "散发着微光，孵化稀有灵宠概率更高",         "type": "pet_egg", "egg_tier": "rare", "price": 300},
+    "egg_legend":    {"name": "传说灵兽蛋",   "desc": "灵气氤氲的上古灵兽蛋，必定孵化稀有以上",   "type": "pet_egg", "egg_tier": "legend", "price": 1000},
+    # ── 灵宠喂养 ──
+    "pet_feed":      {"name": "灵兽饲料",     "desc": "给灵宠提供10点成长经验", "type": "pet_food", "pet_exp": 10, "price": 15},
+    "pet_feed_good": {"name": "高级灵兽粮",   "desc": "给灵宠提供50点成长经验", "type": "pet_food", "pet_exp": 50, "price": 80},
+    "pet_feed_best": {"name": "万灵精华",     "desc": "给灵宠提供200点成长经验", "type": "pet_food", "pet_exp": 200, "price": 350},
 }
 
 # 掉落表：monster_id -> [(item_id, 概率)]
@@ -383,6 +514,17 @@ DROP_TABLE = {
     # 五阶妖兽 (化神+ 12+)
     "flood_dragon":      [("longlin_armor", 0.05), ("huichun_dan", 0.5), ("pojing_dan", 0.05), ("wanling_guo", 0.2), ("longxian_cao", 0.08), ("zijin_kuang", 0.06)],
     "ancient_true_dragon":[("zhanlong_sword", 0.12), ("longlin_armor", 0.08), ("pojing_dan", 0.1), ("liliang_fulu", 0.15), ("huti_fulu", 0.15), ("wanling_guo", 0.25), ("fengxue_hua", 0.08), ("zijin_kuang", 0.1)],
+}
+
+# 部分怪物额外掉落宠物蛋
+PET_EGG_MONSTER_DROPS = {
+    "wolf_king":         [("egg_common", 0.10)],
+    "ancient_tree_demon":[("egg_common", 0.08)],
+    "purple_eagle":      [("egg_rare", 0.06)],
+    "cave_troll_yao":    [("egg_common", 0.08), ("egg_rare", 0.03)],
+    "demonic_cultivator":[("egg_rare", 0.05)],
+    "shadow_demon":      [("egg_rare", 0.06), ("egg_legend", 0.01)],
+    "flood_dragon":      [("egg_rare", 0.10), ("egg_legend", 0.03)],
 }
 
 # ═══════════════ 怪物生成 ═══════════════

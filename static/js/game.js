@@ -221,6 +221,13 @@ function renderShop() {
         // 饰品（基础，高阶需锻造）
         { id: "qingyu_peidai", name: "青玉佩",     desc: "攻+2 气血+10",         price: 80,   cat: "饰品" },
         { id: "tongqian_hufu", name: "铜钱护符",   desc: "防+2 气血+10",         price: 80,   cat: "饰品" },
+        // 灵宠
+        { id: "egg_common",    name: "灵兽蛋",     desc: "孵化普通灵宠",       price: 80,   cat: "灵宠" },
+        { id: "egg_rare",      name: "稀有灵兽蛋", desc: "孵化稀有灵宠概率更高", price: 300,  cat: "灵宠" },
+        { id: "egg_legend",    name: "传说灵兽蛋", desc: "必定孵化稀有以上",   price: 1000, cat: "灵宠" },
+        { id: "pet_feed",      name: "灵兽饲料",   desc: "灵宠经验+10",       price: 15,   cat: "灵宠" },
+        { id: "pet_feed_good", name: "高级灵兽粮", desc: "灵宠经验+50",       price: 80,   cat: "灵宠" },
+        { id: "pet_feed_best", name: "万灵精华",   desc: "灵宠经验+200",      price: 350,  cat: "灵宠" },
     ];
     const div = document.getElementById("shop-list");
     div.innerHTML = "";
@@ -383,14 +390,125 @@ function renderForgePanel(data) {
     document.getElementById("forge-modal").style.display = "flex";
 }
 
+// ═══════════════ 灵宠面板 ═══════════════
+
+function renderPetPanel() {
+    const body = document.getElementById("pet-body");
+    body.innerHTML = "";
+
+    if (!gameState || !gameState.pets || gameState.pets.length === 0) {
+        body.innerHTML = '<div style="color:#3a4a42;font-size:13px;padding:8px;">你还没有灵宠。击杀妖兽或探索场景可获得灵兽蛋，在储物袋中点击蛋即可孵化。</div>';
+        document.getElementById("pet-modal").style.display = "flex";
+        return;
+    }
+
+    const rarityColors = { common: "#c8c0b0", rare: "#7eb8da", legend: "#d4b870" };
+    const rarityNames = { common: "普通", rare: "稀有", legend: "传说" };
+    const elementIcons = { 金: "金", 木: "木", 水: "水", 火: "火", 土: "土" };
+
+    // 出战灵宠
+    const activePet = gameState.pets.find(p => p.is_active);
+    if (activePet) {
+        const header = document.createElement("div");
+        header.className = "forge-cat-header";
+        header.textContent = "━━ 当前出战 ━━";
+        body.appendChild(header);
+
+        const entry = document.createElement("div");
+        entry.className = "pet-entry active-pet";
+        const rc = rarityColors[activePet.rarity];
+        const elem = activePet.element ? ` [${elementIcons[activePet.element]}]` : "";
+        entry.innerHTML = `
+            <div class="pet-row1">
+                <span class="pet-name" style="color:${rc}">${activePet.name}</span>
+                <span class="pet-rarity">${rarityNames[activePet.rarity]}${elem}</span>
+                <span class="pet-level">Lv.${activePet.level}</span>
+            </div>
+            <div class="pet-row2">气血+${Math.floor(activePet.hp*0.3)} 攻击+${Math.floor(activePet.atk*0.3)} 防御+${Math.floor(activePet.def*0.3)}</div>
+            <div class="pet-row3">经验 ${activePet.exp}/${activePet.exp_needed}</div>
+        `;
+        const btnDiv = document.createElement("div");
+        btnDiv.style.marginTop = "6px";
+
+        // 喂养按钮
+        const feedItems = (gameState.inventory || []).filter(i => i.id.startsWith("pet_feed"));
+        feedItems.forEach(fi => {
+            const btn = document.createElement("button");
+            btn.className = "btn btn-sm btn-feed";
+            btn.textContent = `喂${fi.name}(x${fi.count})`;
+            btn.onclick = () => socket.emit("feed_pet", { pet_id: activePet.id, item: fi.id });
+            btnDiv.appendChild(btn);
+        });
+
+        const deactivateBtn = document.createElement("button");
+        deactivateBtn.className = "btn btn-sm";
+        deactivateBtn.textContent = "收回";
+        deactivateBtn.style.marginLeft = "8px";
+        deactivateBtn.onclick = () => socket.emit("deactivate_pet");
+        btnDiv.appendChild(deactivateBtn);
+
+        entry.appendChild(btnDiv);
+        body.appendChild(entry);
+    }
+
+    // 其他灵宠
+    const bench = gameState.pets.filter(p => !p.is_active);
+    if (bench.length > 0) {
+        const header = document.createElement("div");
+        header.className = "forge-cat-header";
+        header.textContent = "━━ 灵宠列表 ━━";
+        body.appendChild(header);
+
+        bench.forEach(pet => {
+            const entry = document.createElement("div");
+            entry.className = "pet-entry";
+            const rc = rarityColors[pet.rarity];
+            const elem = pet.element ? ` [${elementIcons[pet.element]}]` : "";
+            entry.innerHTML = `
+                <div class="pet-row1">
+                    <span class="pet-name" style="color:${rc}">${pet.name}</span>
+                    <span class="pet-rarity">${rarityNames[pet.rarity]}${elem}</span>
+                    <span class="pet-level">Lv.${pet.level}</span>
+                </div>
+                <div class="pet-row2">${pet.desc}</div>
+                <div class="pet-row3">气血${pet.hp} 攻击${pet.atk} 防御${pet.def} | 经验 ${pet.exp}/${pet.exp_needed}</div>
+            `;
+            const btnDiv = document.createElement("div");
+            btnDiv.style.marginTop = "6px";
+
+            const feedItems = (gameState.inventory || []).filter(i => i.id.startsWith("pet_feed"));
+            feedItems.forEach(fi => {
+                const btn = document.createElement("button");
+                btn.className = "btn btn-sm btn-feed";
+                btn.textContent = `喂${fi.name}(x${fi.count})`;
+                btn.onclick = () => socket.emit("feed_pet", { pet_id: pet.id, item: fi.id });
+                btnDiv.appendChild(btn);
+            });
+
+            const activateBtn = document.createElement("button");
+            activateBtn.className = "btn btn-sm btn-learn";
+            activateBtn.textContent = "出战";
+            activateBtn.style.marginLeft = "8px";
+            activateBtn.onclick = () => socket.emit("activate_pet", { pet_id: pet.id });
+            btnDiv.appendChild(activateBtn);
+
+            entry.appendChild(btnDiv);
+            body.appendChild(entry);
+        });
+    }
+
+    document.getElementById("pet-modal").style.display = "flex";
+}
+
 function showPanel(name) {
     if (name === "techniques") socket.emit("get_techniques");
     else if (name === "meridians") socket.emit("get_meridians");
     else if (name === "alchemy") showAlchemy();
     else if (name === "forge") socket.emit("get_forge_recipes");
+    else if (name === "pets") renderPetPanel();
 }
 function closePanel(name) {
-    const map = { tech: "tech-modal", mer: "mer-modal", alchemy: "alchemy-modal", forge: "forge-modal" };
+    const map = { tech: "tech-modal", mer: "mer-modal", alchemy: "alchemy-modal", forge: "forge-modal", pet: "pet-modal" };
     document.getElementById(map[name]).style.display = "none";
 }
 
