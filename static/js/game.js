@@ -57,6 +57,7 @@ socket.on("afk_tick", (data) => {
     addLog(msg, "system");
     socket.emit("get_state");
 });
+socket.on("npc_detail", (data) => renderNPCDetail(data));
 
 // 奇遇事件
 socket.on("fortune_event", (data) => {
@@ -163,6 +164,49 @@ function renderState(s) {
 
     renderInventory(s.inventory);
     document.getElementById("online-count").textContent = `道友在线: ${s.online_count}`;
+
+    // NPC
+    const npcArea = document.getElementById("npc-area");
+    const npcList = document.getElementById("npc-list");
+    if (s.npcs && s.npcs.length > 0) {
+        npcArea.style.display = "block";
+        npcList.innerHTML = "";
+        s.npcs.forEach(npc => {
+            const div = document.createElement("div");
+            div.className = "npc-entry";
+            const tierColors = ["#8b949e","#7eb8da","#6abd7a","#d4b870"];
+            div.innerHTML = `<span class="npc-name-btn" style="color:${tierColors[npc.goodwill_tier]}">${npc.name}</span><span class="npc-title">${npc.title}</span><span class="npc-gw">好感 ${npc.goodwill}（${npc.goodwill_tier_name}）</span>`;
+            div.onclick = () => socket.emit("npc_interact", { npc_id: npc.id });
+            npcList.appendChild(div);
+        });
+    } else {
+        npcArea.style.display = "none";
+    }
+
+    // 任务追踪
+    const tracker = document.getElementById("quest-tracker");
+    if (s.quests && s.quests.active && s.quests.active.length > 0) {
+        tracker.innerHTML = "";
+        s.quests.active.forEach(q => {
+            const div = document.createElement("div");
+            div.className = "quest-entry";
+            let progHtml = q.progress.map(p => {
+                const done = p.done >= p.need;
+                return `<div class="quest-prog ${done ? 'done' : ''}">${p.desc} ${p.done}/${p.need}</div>`;
+            }).join("");
+            div.innerHTML = `<div class="quest-name">${q.name}</div>${progHtml}<button class="btn btn-sm btn-quest-complete" onclick="socket.emit('quest_complete',{quest_id:'${q.id}'})">交付</button>`;
+            tracker.appendChild(div);
+        });
+    } else {
+        tracker.innerHTML = '<div style="color:#3a4a42;font-size:11px;">暂无任务</div>';
+    }
+
+    // 宗门
+    const sectDiv = document.getElementById("sect-info");
+    if (s.sect) {
+        const rankColors = ["#8b949e","#7eb8da","#d4b870","#d45555"];
+        sectDiv.innerHTML = `<div style="color:${rankColors[s.sect.rank]};font-weight:bold;">${s.sect.rank_name}</div><div style="font-size:11px;color:#6a8a7a;">贡献 ${s.sect.contrib} | ${s.sect.desc}</div>`;
+    }
 }
 
 function renderInventory(items) {
@@ -500,6 +544,52 @@ function renderPetPanel() {
     document.getElementById("pet-modal").style.display = "flex";
 }
 
+// ═══════════════ NPC面板 ═══════════════
+
+function renderNPCDetail(data) {
+    const header = document.getElementById("npc-detail-header");
+    const body = document.getElementById("npc-detail-body");
+    const tierColors = ["#8b949e","#7eb8da","#6abd7a","#d4b870"];
+    const tierNames = ["陌生","熟人","友好","知己"];
+
+    header.innerHTML = `<h3>${data.name} <span style="font-size:12px;color:#6a8a7a;">${data.title}</span></h3>
+        <div style="margin:8px 0;"><span style="color:${tierColors[data.goodwill_tier]}">好感度 ${data.goodwill}（${tierNames[data.goodwill_tier]}）</span></div>`;
+
+    let html = `<div class="npc-dialog-box">${data.dialogue}</div>`;
+    if (data.realm_dialogue) {
+        html += `<div class="npc-dialog-box realm-dialog">${data.realm_dialogue}</div>`;
+    }
+
+    // 可接任务
+    if (data.available_quests && data.available_quests.length > 0) {
+        html += '<div class="npc-section"><strong>可接任务：</strong></div>';
+        data.available_quests.forEach(q => {
+            html += `<div class="npc-quest-entry">
+                <div class="quest-name">${q.name} ${q.daily ? '<span style="color:#d4b870;font-size:10px;">日常</span>' : ''}</div>
+                <div style="font-size:12px;color:#6a8a7a;">${q.desc}</div>
+                ${q.accept_text ? `<div class="npc-dialog-box" style="font-size:11px;">${q.accept_text}</div>` : ''}
+                <button class="btn btn-sm btn-learn" onclick="socket.emit('quest_accept',{quest_id:'${q.id}'})">接受任务</button>
+            </div>`;
+        });
+    }
+
+    // 赠礼
+    html += `<div class="npc-section"><strong>赠礼</strong> <span style="font-size:11px;color:#6a8a7a;">（每日一次，赠予喜好的物品提升更多好感）</span></div>`;
+    const inv = gameState ? gameState.inventory : [];
+    if (inv.length > 0) {
+        html += '<div style="display:flex;flex-wrap:wrap;gap:4px;">';
+        inv.forEach(item => {
+            html += `<button class="btn btn-sm btn-gift" onclick="socket.emit('npc_gift',{npc_id:'${data.id}',item:'${item.id}'})">${item.name}(${item.count})</button>`;
+        });
+        html += '</div>';
+    } else {
+        html += '<div style="color:#3a4a42;font-size:11px;">储物袋空空如也</div>';
+    }
+
+    body.innerHTML = html;
+    document.getElementById("npc-modal").style.display = "flex";
+}
+
 function showPanel(name) {
     if (name === "techniques") socket.emit("get_techniques");
     else if (name === "meridians") socket.emit("get_meridians");
@@ -508,7 +598,7 @@ function showPanel(name) {
     else if (name === "pets") renderPetPanel();
 }
 function closePanel(name) {
-    const map = { tech: "tech-modal", mer: "mer-modal", alchemy: "alchemy-modal", forge: "forge-modal", pet: "pet-modal" };
+    const map = { tech: "tech-modal", mer: "mer-modal", alchemy: "alchemy-modal", forge: "forge-modal", pet: "pet-modal", npc: "npc-modal" };
     document.getElementById(map[name]).style.display = "none";
 }
 

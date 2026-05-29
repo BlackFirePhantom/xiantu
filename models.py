@@ -62,6 +62,12 @@ def init_db():
                 open_meridians TEXT DEFAULT '[]',
                 pets TEXT DEFAULT '[]',
                 active_pet TEXT DEFAULT NULL,
+                npc_goodwill TEXT DEFAULT '{}',
+                active_quests TEXT DEFAULT '[]',
+                completed_quests TEXT DEFAULT '[]',
+                sect_contrib INTEGER DEFAULT 0,
+                daily_quest_date TEXT DEFAULT NULL,
+                npc_gift_date TEXT DEFAULT '{}',
                 last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (user_id) REFERENCES users(id)
             );
@@ -76,6 +82,12 @@ def init_db():
             ("combat_buff", "INTEGER DEFAULT 0"),
             ("pets", "TEXT DEFAULT '[]'"),
             ("active_pet", "TEXT DEFAULT NULL"),
+            ("npc_goodwill", "TEXT DEFAULT '{}'"),
+            ("active_quests", "TEXT DEFAULT '[]'"),
+            ("completed_quests", "TEXT DEFAULT '[]'"),
+            ("sect_contrib", "INTEGER DEFAULT 0"),
+            ("daily_quest_date", "TEXT DEFAULT NULL"),
+            ("npc_gift_date", "TEXT DEFAULT '{}'"),
         ]:
             if not _column_exists(conn, "characters", col):
                 conn.execute(f"ALTER TABLE characters ADD COLUMN {col} {col_def}")

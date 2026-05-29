@@ -24,6 +24,10 @@ from game_data import (
     hatch_egg, get_pet_stats, get_pet_exp_needed,
     IDLE_EXP_PER_SEC, IDLE_MAX_HOURS,
 )
+from npc_data import (
+    NPCS, QUESTS, NPC_GOODWILL_TIERS, SECT_RANKS,
+    get_goodwill_tier, get_sect_rank,
+)
 
 app = Flask(__name__)
 app.secret_key = secrets.token_hex(32)
@@ -186,6 +190,9 @@ def get_cultivation_mult(char):
     ac = lookup_item(char["accessory"]) if char["accessory"] else None
     if ac:
         mult += ac.get("bonus_exp_pct", 0)
+    # 宗门贡献修炼加成
+    sect_rank = get_sect_rank(char["sect_contrib"] if char["sect_contrib"] else 0)
+    mult += SECT_RANKS[sect_rank]["bonus"]
     return mult
 
 def process_offline_cultivation(char):
@@ -391,6 +398,9 @@ def handle_get_state():
         "inventory": inv_display,
         "equipment": equip_info,
         "pets": get_pet_display_info(char),
+        "npcs": get_npc_info_for_location(char),
+        "quests": get_quest_info(char),
+        "sect": get_sect_info(char),
         "online_count": len(online_users),
         "is_afk": session.get("username", "") in afk_players,
     })
@@ -426,6 +436,10 @@ def handle_move(data):
     # 突发事件判定（移动类）
     char = get_character(session["user_id"])
     process_surprise(char, "move")
+
+    # 任务进度（访问类）
+    char = get_character(session["user_id"])
+    _check_quest_progress(char, "visit", target)
 
     handle_get_state()
 
@@ -956,6 +970,10 @@ def handle_fight():
         set_character_inventory(session["user_id"], inv)
 
         update_character(session["user_id"], hp=player_hp, exp=char["exp"] + exp_gain, gold=char["gold"] + gold_gain, kills=char["kills"] + 1)
+
+        # 任务进度（击杀类）
+        char = get_character(session["user_id"])
+        _check_quest_progress(char, "kill", monster_id)
     else:
         gold_lost = char["gold"] // 5
         log.append("你体内灵力耗尽，不敌妖兽……陨落于此。")
@@ -1536,6 +1554,299 @@ def handle_deactivate_pet():
     update_character(session["user_id"], active_pet=None)
     emit("game_msg", {"text": "你收回了出战灵宠。", "type": "equip"})
     handle_get_state()
+
+
+# ═══════════════ NPC系统 ═══════════════
+
+def _get_goodwill(char):
+    return json.loads(char["npc_goodwill"]) if char["npc_goodwill"] else {}
+
+def _get_active_quests(char):
+    return json.loads(char["active_quests"]) if char["active_quests"] else []
+
+def _get_completed_quests(char):
+    return json.loads(char["completed_quests"]) if char["completed_quests"] else []
+
+def _get_gift_dates(char):
+    return json.loads(char["npc_gift_date"]) if char["npc_gift_date"] else {}
+
+def get_npc_info_for_location(char):
+    """获取当前地点的NPC信息"""
+    loc_id = char["location"]
+    goodwill = _get_goodwill(char)
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+    gift_dates = _get_gift_dates(char)
+    result = []
+    for nid, npc in NPCS.items():
+        if npc["location"] != loc_id:
+            continue
+        gw = goodwill.get(nid, 0)
+        tier = get_goodwill_tier(gw)
+        # 选择对话
+        dialogues = npc["dialogues"].get(tier, npc["dialogues"][0])
+        # 境界对话
+        realm_text = ""
+        for (lo, hi), text in npc.get("realm_dialogues", {}).items():
+            if lo <= char["level"] <= hi:
+                realm_text = text
+                break
+        # 今日是否已赠礼
+        can_gift = gift_dates.get(nid) != today
+        result.append({
+            "id": nid, "name": npc["name"], "title": npc["title"],
+            "type": npc["type"], "realm": realm_name(npc["realm"]),
+            "goodwill": gw, "goodwill_tier": tier,
+            "goodwill_tier_name": NPC_GOODWILL_TIERS[tier]["name"],
+            "dialogue": random.choice(dialogues),
+            "realm_dialogue": realm_text,
+            "can_gift": can_gift,
+        })
+    return result
+
+def get_quest_info(char):
+    """获取当前活跃任务信息"""
+    active = _get_active_quests(char)
+    completed = _get_completed_quests(char)
+    result = []
+    for q in active:
+        quest = QUESTS.get(q["id"])
+        if not quest: continue
+        progress = []
+        for obj_type, obj_data in quest["objectives"].items():
+            if obj_type == "kill":
+                for mid, need in obj_data.items():
+                    done = q["progress"].get(f"kill_{mid}", 0)
+                    progress.append({"desc": f"击杀{MONSTERS.get(mid,{}).get('name',mid)}", "done": done, "need": need})
+            elif obj_type == "collect":
+                for iid, need in obj_data.items():
+                    done = q["progress"].get(f"collect_{iid}", 0)
+                    progress.append({"desc": f"收集{ITEMS.get(iid,{}).get('name',iid)}", "done": done, "need": need})
+            elif obj_type == "visit":
+                for lid in obj_data:
+                    done = q["progress"].get(f"visit_{lid}", 0)
+                    progress.append({"desc": f"到达{LOCATIONS.get(lid,{}).get('name',lid)}", "done": 1 if done else 0, "need": 1})
+            elif obj_type == "kill_any":
+                done = q["progress"].get("kill_any", 0)
+                progress.append({"desc": f"击杀任意妖兽", "done": done, "need": obj_data})
+        result.append({"id": q["id"], "name": quest["name"], "desc": quest["desc"], "npc": quest["npc"], "progress": progress})
+    return {"active": result, "completed_count": len(completed)}
+
+def get_sect_info(char):
+    contrib = char["sect_contrib"] if char["sect_contrib"] else 0
+    rank = get_sect_rank(contrib)
+    return {"contrib": contrib, "rank": rank, "rank_name": SECT_RANKS[rank]["name"], "bonus": SECT_RANKS[rank]["bonus"], "desc": SECT_RANKS[rank]["desc"]}
+
+
+@socketio.on("npc_interact")
+def handle_npc_interact(data):
+    if "user_id" not in session: return
+    char = get_character(session["user_id"])
+    if not char: return
+    nid = data.get("npc_id")
+    if not nid or nid not in NPCS: return
+    npc = NPCS[nid]
+    if npc["location"] != char["location"]:
+        emit("game_msg", {"text": "此地并无此人。", "type": "error"})
+        return
+    # 每日首次对话+1好感
+    gw = _get_goodwill(char)
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+    gift_dates = _get_gift_dates(char)
+    daily_key = f"daily_{nid}"
+    if gift_dates.get(daily_key) != today:
+        gw[nid] = gw.get(nid, 0) + 1
+        gift_dates[daily_key] = today
+        update_character(session["user_id"], npc_goodwill=json.dumps(gw), npc_gift_date=json.dumps(gift_dates))
+
+    # 返回NPC详细信息（含可用任务）
+    goodwill = gw.get(nid, 0)
+    tier = get_goodwill_tier(goodwill)
+    dialogues = npc["dialogues"].get(tier, npc["dialogues"][0])
+    realm_text = ""
+    for (lo, hi), text in npc.get("realm_dialogues", {}).items():
+        if lo <= char["level"] <= hi:
+            realm_text = text
+            break
+
+    # 可接任务
+    completed = _get_completed_quests(char)
+    active_ids = [q["id"] for q in _get_active_quests(char)]
+    available_quests = []
+    for qid, q in QUESTS.items():
+        if q["npc"] != nid: continue
+        if qid in active_ids: continue
+        if not q["daily"] and qid in completed: continue
+        if char["level"] < q["req_realm"]: continue
+        available_quests.append({"id": qid, "name": q["name"], "desc": q["desc"], "daily": q["daily"],
+                                 "accept_text": q.get("accept_text", "")})
+
+    emit("npc_detail", {
+        "id": nid, "name": npc["name"], "title": npc["title"],
+        "type": npc["type"], "goodwill": goodwill, "goodwill_tier": tier,
+        "goodwill_tier_name": NPC_GOODWILL_TIERS[tier]["name"],
+        "dialogue": random.choice(dialogues),
+        "realm_dialogue": realm_text,
+        "available_quests": available_quests,
+        "gift_preferences": npc.get("gift_preferences", {}),
+    })
+
+
+@socketio.on("npc_gift")
+def handle_npc_gift(data):
+    if "user_id" not in session: return
+    char = get_character(session["user_id"])
+    if not char: return
+    nid = data.get("npc_id")
+    item_id = data.get("item")
+    if not nid or nid not in NPCS or not item_id: return
+
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+    gift_dates = _get_gift_dates(char)
+    if gift_dates.get(nid) == today:
+        emit("game_msg", {"text": "今日已经赠过礼了，明日再来。", "type": "error"})
+        return
+
+    inv = get_character_inventory(session["user_id"])
+    if inv.get(item_id, 0) <= 0:
+        emit("game_msg", {"text": "你没有这个物品。", "type": "error"})
+        return
+
+    npc = NPCS[nid]
+    prefs = npc.get("gift_preferences", {})
+    if item_id in prefs.get("liked", []):
+        change = prefs.get("liked_value", 3)
+    elif item_id in prefs.get("disliked", []):
+        change = prefs.get("disliked_value", -2)
+    else:
+        change = 1
+
+    inv[item_id] -= 1
+    if inv[item_id] <= 0: del inv[item_id]
+    set_character_inventory(session["user_id"], inv)
+
+    gw = _get_goodwill(char)
+    gw[nid] = max(0, gw.get(nid, 0) + change)
+    gift_dates[nid] = today
+    update_character(session["user_id"], npc_goodwill=json.dumps(gw), npc_gift_date=json.dumps(gift_dates))
+
+    if change > 0:
+        emit("game_msg", {"text": f"你将【{ITEMS[item_id]['name']}】赠予{npc['name']}，好感度+{change}。", "type": "heal"})
+    else:
+        emit("game_msg", {"text": f"你将【{ITEMS[item_id]['name']}】赠予{npc['name']}，但对方似乎不太喜欢……好感度{change}。", "type": "error"})
+    handle_get_state()
+
+
+@socketio.on("quest_accept")
+def handle_quest_accept(data):
+    if "user_id" not in session: return
+    char = get_character(session["user_id"])
+    if not char: return
+    qid = data.get("quest_id")
+    if not qid or qid not in QUESTS: return
+    quest = QUESTS[qid]
+    if char["level"] < quest["req_realm"]:
+        emit("game_msg", {"text": f"境界不足，需要{realm_name(quest['req_realm'])}。", "type": "error"})
+        return
+    active = _get_active_quests(char)
+    if any(q["id"] == qid for q in active):
+        emit("game_msg", {"text": "你已经接了这个任务。", "type": "error"})
+        return
+    completed = _get_completed_quests(char)
+    if not quest["daily"] and qid in completed:
+        emit("game_msg", {"text": "这个任务已经完成过了。", "type": "error"})
+        return
+    active.append({"id": qid, "progress": {}})
+    update_character(session["user_id"], active_quests=json.dumps(active))
+    emit("game_msg", {"text": quest.get("accept_text", f"接受了任务：{quest['name']}"), "type": "info"})
+    handle_get_state()
+
+
+@socketio.on("quest_complete")
+def handle_quest_complete(data):
+    if "user_id" not in session: return
+    char = get_character(session["user_id"])
+    if not char: return
+    qid = data.get("quest_id")
+    if not qid or qid not in QUESTS: return
+    quest = QUESTS[qid]
+    active = _get_active_quests(char)
+    target = None
+    for q in active:
+        if q["id"] == qid:
+            target = q
+            break
+    if not target:
+        emit("game_msg", {"text": "你没有接这个任务。", "type": "error"})
+        return
+    # 检查完成条件
+    for obj_type, obj_data in quest["objectives"].items():
+        if obj_type in ("kill", "collect"):
+            for mid, need in obj_data.items():
+                key = f"{obj_type}_{mid}"
+                if target["progress"].get(key, 0) < need:
+                    emit("game_msg", {"text": "任务目标尚未完成。", "type": "error"})
+                    return
+        elif obj_type == "visit":
+            for lid in obj_data:
+                if not target["progress"].get(f"visit_{lid}", 0):
+                    emit("game_msg", {"text": "任务目标尚未完成。", "type": "error"})
+                    return
+        elif obj_type == "kill_any":
+            if target["progress"].get("kill_any", 0) < obj_data:
+                emit("game_msg", {"text": "任务目标尚未完成。", "type": "error"})
+                return
+    # 发放奖励
+    rewards = quest["rewards"]
+    new_exp = char["exp"] + rewards.get("exp", 0)
+    new_gold = char["gold"] + rewards.get("gold", 0)
+    new_contrib = (char["sect_contrib"] or 0) + rewards.get("sect_contrib", 0)
+    gw = _get_goodwill(char)
+    for npc_id, gw_change in rewards.get("goodwill", {}).items():
+        gw[npc_id] = gw.get(npc_id, 0) + gw_change
+    if rewards.get("items"):
+        inv = get_character_inventory(session["user_id"])
+        for iid, cnt in rewards["items"].items():
+            inv[iid] = inv.get(iid, 0) + cnt
+        set_character_inventory(session["user_id"], inv)
+    # 更新任务状态
+    active = [q for q in active if q["id"] != qid]
+    completed = _get_completed_quests(char)
+    if not quest["daily"]:
+        completed.append(qid)
+    update_character(session["user_id"], exp=new_exp, gold=new_gold,
+                     sect_contrib=new_contrib, npc_goodwill=json.dumps(gw),
+                     active_quests=json.dumps(active), completed_quests=json.dumps(completed))
+    emit("game_msg", {"text": quest.get("complete_text", f"完成任务：{quest['name']}！"), "type": "heal"})
+    emit("game_msg", {"text": f"获得 {rewards.get('exp',0)} 修为、{rewards.get('gold',0)} 灵石" +
+         (f"、宗门贡献+{rewards.get('sect_contrib',0)}" if rewards.get("sect_contrib") else ""), "type": "shop"})
+    handle_get_state()
+
+
+def _check_quest_progress(char, event_type, key, count=1):
+    """检查并更新任务进度"""
+    uid = char["user_id"] if "user_id" in char else session.get("user_id")
+    active = _get_active_quests(char)
+    changed = False
+    for q in active:
+        quest = QUESTS.get(q["id"])
+        if not quest: continue
+        for obj_type, obj_data in quest["objectives"].items():
+            if event_type == "kill" and obj_type == "kill" and key in obj_data:
+                pkey = f"kill_{key}"
+                q["progress"][pkey] = q["progress"].get(pkey, 0) + count
+                changed = True
+            elif event_type == "kill" and obj_type == "kill_any":
+                q["progress"]["kill_any"] = q["progress"].get("kill_any", 0) + count
+                changed = True
+            elif event_type == "collect" and obj_type == "collect" and key in obj_data:
+                pkey = f"collect_{key}"
+                q["progress"][pkey] = q["progress"].get(pkey, 0) + count
+                changed = True
+            elif event_type == "visit" and obj_type == "visit" and key in obj_data:
+                q["progress"][f"visit_{key}"] = 1
+                changed = True
+    if changed and uid:
+        update_character(uid, active_quests=json.dumps(active))
 
 
 # ═══════════════ 启动 ═══════════════

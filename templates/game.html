@@ -61,7 +61,7 @@
             </div>
             <p id="loc-desc" class="location-desc">-</p>
             <div id="npc-area" style="display:none;">
-                <p class="npc-text"><strong id="npc-name">NPC</strong>: <span id="npc-dialog">-</span></p>
+                <div id="npc-list"></div>
             </div>
 
             <div class="action-bar">
@@ -99,6 +99,12 @@
                 <input type="text" id="chat-input" placeholder="传音入密..." maxlength="200">
                 <button class="btn btn-sm" onclick="sendChat()">传音</button>
             </div>
+
+            <h3>任务追踪</h3>
+            <div id="quest-tracker" class="quest-tracker"></div>
+
+            <h3>宗门</h3>
+            <div id="sect-info" class="sect-info-box"></div>
         </div>
     </div>
 
@@ -158,6 +164,15 @@
             <p class="forge-hint">孵化灵兽蛋获得灵宠，喂养灵兽饲料提升等级。灵宠出战时为你提供属性加成。</p>
             <div id="pet-body"></div>
             <button class="btn" onclick="closePanel('pet')">关闭</button>
+        </div>
+    </div>
+
+    <!-- NPC交互面板 -->
+    <div id="npc-modal" class="modal" style="display:none;">
+        <div class="modal-content" style="width:520px;">
+            <div id="npc-detail-header"></div>
+            <div id="npc-detail-body"></div>
+            <button class="btn" onclick="closePanel('npc')">离开</button>
         </div>
     </div>
 

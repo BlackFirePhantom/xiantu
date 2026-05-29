@@ -453,6 +453,39 @@ a:hover { color: #a8d8ea; text-decoration: underline; }
 .pet-row2 { color: #6a8a7a; font-size: 12px; margin-top: 4px; }
 .pet-row3 { color: #5a7a6a; font-size: 11px; margin-top: 2px; }
 
+/* ===== NPC系统 ===== */
+.npc-entry {
+    display: flex; align-items: center; gap: 8px; padding: 6px 8px;
+    background: #0f1519; border: 1px solid #1e2a22; border-radius: 6px;
+    margin-bottom: 4px; cursor: pointer; transition: all 0.15s;
+}
+.npc-entry:hover { background: #1a2420; border-color: #3a4a32; }
+.npc-name-btn { font-weight: bold; font-size: 14px; }
+.npc-title { font-size: 11px; color: #6a8a7a; }
+.npc-gw { font-size: 11px; color: #5a7a6a; margin-left: auto; }
+
+.npc-dialog-box {
+    background: #0f1519; border-left: 3px solid #4a8a5a; padding: 10px 12px;
+    margin: 8px 0; font-size: 13px; line-height: 1.7; color: #a0b890;
+    border-radius: 0 6px 6px 0;
+}
+.npc-dialog-box.realm-dialog { border-left-color: #7eb8da; color: #90b0c0; }
+.npc-section { margin-top: 12px; padding-top: 8px; border-top: 1px solid #1e2a22; color: #c8c0b0; font-size: 13px; }
+.npc-quest-entry { background: #0a0e14; border: 1px solid #1e2a22; border-radius: 6px; padding: 8px; margin: 6px 0; }
+.btn-gift { background: #1a2a1a; border-color: #3a5a3a; color: #90c090; font-size: 11px; padding: 3px 8px; }
+.btn-gift:hover { background: #2a3a2a; }
+
+/* ===== 任务追踪 ===== */
+.quest-tracker { max-height: 150px; overflow-y: auto; margin-bottom: 8px; }
+.quest-entry { background: #0f1519; border: 1px solid #1e2a22; border-radius: 6px; padding: 6px 8px; margin-bottom: 4px; font-size: 12px; }
+.quest-name { color: #d4b870; font-weight: bold; font-size: 12px; }
+.quest-prog { color: #6a8a7a; font-size: 11px; }
+.quest-prog.done { color: #6abd7a; text-decoration: line-through; }
+.btn-quest-complete { margin-top: 4px; }
+
+/* ===== 宗门信息 ===== */
+.sect-info-box { padding: 6px 0; font-size: 12px; }
+
 /* ===== 响应式 ===== */
 @media (max-width: 900px) {
     .game-layout {
