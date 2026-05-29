@@ -268,7 +268,11 @@ def login():
         if user and user["password_hash"] == hash_password(password):
             session["user_id"] = user["id"]
             session["username"] = user["username"]
-            return redirect(url_for("game"))
+            char = get_character(user["id"])
+            if char:
+                return redirect(url_for("game"))
+            else:
+                return redirect(url_for("create"))
         return render_template("index.html", page="login", error="道号或密令有误")
     return render_template("index.html", page="login")
 
