@@ -502,15 +502,160 @@ a:hover { color: #a8d8ea; text-decoration: underline; }
 .btn-frag-action:hover { background: #342444; }
 
 /* ===== 响应式 ===== */
+/* ===== 手机适配 ===== */
 @media (max-width: 900px) {
     .game-layout {
         grid-template-columns: 1fr;
         grid-template-rows: auto 1fr auto;
         height: auto;
+        min-height: 100vh;
     }
-    .panel { border-right: none; border-bottom: 1px solid #1e2a22; }
-    .player-panel { max-height: 300px; }
-    .right-panel { max-height: 400px; }
+    .panel {
+        border-right: none;
+        border-bottom: 1px solid #1e2a22;
+        padding: 12px;
+    }
+    .player-panel {
+        max-height: none;
+        padding-bottom: 8px;
+    }
+    .game-panel {
+        min-height: 60vh;
+    }
+    .right-panel {
+        max-height: none;
+    }
+    /* 顶栏 */
+    .top-bar {
+        padding: 8px 12px;
+        flex-wrap: wrap;
+        gap: 4px;
+    }
+    .game-title { font-size: 16px; }
+    .user-info { font-size: 12px; }
+    /* 操作按钮 */
+    .action-bar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+    .action-bar .btn {
+        flex: 1 1 auto;
+        min-width: 70px;
+        padding: 10px 8px;
+        font-size: 13px;
+        text-align: center;
+    }
+    /* 弹窗全屏 */
+    .modal-content {
+        width: 95vw !important;
+        max-width: 95vw !important;
+        max-height: 90vh;
+        margin: 5vh auto;
+        padding: 16px;
+        border-radius: 10px;
+    }
+    /* 游戏日志 */
+    .game-log {
+        min-height: 200px;
+        height: 50vh;
+        font-size: 13px;
+        line-height: 1.7;
+    }
+    /* 属性面板两列 */
+    .stat-line {
+        font-size: 12px;
+        padding: 3px 0;
+    }
+    /* 连接按钮 */
+    .conn-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+    .conn-btn {
+        flex: 1 1 45%;
+        text-align: center;
+        padding: 10px;
+        font-size: 13px;
+    }
+    /* 聊天 */
+    .chat-log {
+        height: 150px;
+        min-height: 100px;
+    }
+    .chat-input-wrap input {
+        font-size: 16px; /* 防止iOS缩放 */
+        padding: 10px;
+    }
+    /* 按钮通用 */
+    .btn {
+        padding: 10px 16px;
+        font-size: 14px;
+    }
+    .btn-sm {
+        padding: 8px 14px;
+        font-size: 12px;
+    }
+    /* 物品条目 */
+    .item-entry {
+        padding: 8px;
+        font-size: 13px;
+    }
+    /* NPC条目 */
+    .npc-entry {
+        padding: 8px 10px;
+    }
+    /* 任务追踪 */
+    .quest-tracker { max-height: 200px; }
+    /* 排行榜 */
+    .lb-table th, .lb-table td {
+        padding: 8px 6px;
+        font-size: 12px;
+    }
+    /* 炼器/功法条目 */
+    .forge-entry, .tech-entry, .mer-entry, .alchemy-entry, .pet-entry {
+        padding: 8px 10px;
+        font-size: 12px;
+    }
+    .forge-row1, .pet-row1 {
+        flex-wrap: wrap;
+        gap: 4px;
+    }
+    .forge-rate, .pet-level { margin-left: 0; }
+    /* 坊市分类 */
+    .shop-cat-header { font-size: 10px; }
+    /* 奇遇弹窗 */
+    .fortune-popup { padding: 14px; }
+    .fortune-title { font-size: 14px; }
+    .fortune-text { font-size: 13px; }
+    .fortune-choices { flex-direction: column; }
+    .btn-fortune-choice { width: 100%; text-align: center; }
+    /* NPC对话 */
+    .npc-dialog-box {
+        font-size: 13px;
+        padding: 8px 10px;
+    }
+    .npc-quest-entry { font-size: 12px; }
+    /* 坊市列表 */
+    #shop-list { max-height: 250px; }
+    /* 宗门信息 */
+    .sect-info-box { font-size: 11px; }
+    /* 登录页 */
+    .auth-box {
+        width: 92vw;
+        padding: 28px 20px;
+        margin: 0 4vw;
+    }
+    .auth-box h1 { font-size: 26px; letter-spacing: 4px; }
+    .form-group input {
+        padding: 12px;
+        font-size: 16px;
+    }
+    .btn-primary {
+        padding: 12px;
+        font-size: 16px;
+    }
 }
 
 /* ===== 滚动条 ===== */
