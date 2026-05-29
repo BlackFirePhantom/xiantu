@@ -56,17 +56,101 @@ IDLE_EXP_PER_SEC = 0.15
 IDLE_MAX_HOURS = 24
 
 # ═══════════════ 功法系统 ═══════════════
+# 限制字段说明：
+#   req_realm     : 最低境界要求
+#   req_element   : 灵根元素要求 (None=无限制, "火"/"水"/"木"/"金"/"土")
+#   req_technique : 前置功法 (None=无)
+#   cost_gold     : 学习消耗灵石
+#   cost_items    : 学习消耗物品 {item_id: count}
+#   alignment     : 正道/魔道/中立 (中立=无限制)
+#   fragment_only : True 表示只能通过残卷获得
 TECHNIQUES = {
-    "jichu_tuna":  {"name": "基础吐纳术", "tier": "黄阶", "desc": "最基础的吐纳之法",       "bonus_hp": 0,  "bonus_atk": 0,  "bonus_def": 0,  "bonus_exp_pct": 0.05, "req_realm": 1},
-    "lingxi_jue":  {"name": "灵息诀",     "tier": "黄阶", "desc": "感应天地灵气的法诀",     "bonus_hp": 10, "bonus_atk": 1,  "bonus_def": 0,  "bonus_exp_pct": 0.0,  "req_realm": 1},
-    "huntie_gong": {"name": "混铁功",     "tier": "黄阶", "desc": "锤炼肉身的炼体功法",     "bonus_hp": 20, "bonus_atk": 0,  "bonus_def": 2,  "bonus_exp_pct": 0.0,  "req_realm": 2},
-    "qingyun_jue": {"name": "青云诀",     "tier": "玄阶", "desc": "青云镇不传之秘",         "bonus_hp": 15, "bonus_atk": 3,  "bonus_def": 1,  "bonus_exp_pct": 0.1,  "req_realm": 4},
-    "xuantian_gong":{"name": "玄天功",   "tier": "玄阶", "desc": "玄天正宗的镇派功法",     "bonus_hp": 30, "bonus_atk": 5,  "bonus_def": 3,  "bonus_exp_pct": 0.05, "req_realm": 4},
-    "pozhen_jianfa":{"name": "破阵剑法",  "tier": "玄阶", "desc": "以力破巧的刚猛剑法",     "bonus_hp": 0,  "bonus_atk": 8,  "bonus_def": 0,  "bonus_exp_pct": 0.0,  "req_realm": 5},
-    "jiuyang_gong":{"name": "九阳功",     "tier": "地阶", "desc": "至阳至刚的绝世功法",     "bonus_hp": 50, "bonus_atk": 8,  "bonus_def": 2,  "bonus_exp_pct": 0.15, "req_realm": 7},
-    "taiyi_jue":   {"name": "太乙诀",     "tier": "地阶", "desc": "道门正宗的无上法诀",     "bonus_hp": 40, "bonus_atk": 4,  "bonus_def": 8,  "bonus_exp_pct": 0.1,  "req_realm": 7},
-    "tianmo_gong": {"name": "天魔功",     "tier": "地阶", "desc": "魔道至高功法，威力惊人", "bonus_hp": 30, "bonus_atk": 12, "bonus_def": 0,  "bonus_exp_pct": 0.0,  "req_realm": 8},
-    "hundun_jue":  {"name": "混沌诀",     "tier": "天阶", "desc": "上古大能遗留的无上功法", "bonus_hp": 80, "bonus_atk": 15, "bonus_def": 10, "bonus_exp_pct": 0.2,  "req_realm": 10},
+    # ── 黄阶·入门 ──
+    "jichu_tuna":    {"name": "基础吐纳术",   "tier": "黄阶", "desc": "最基础的吐纳之法",
+                      "bonus_hp": 0,  "bonus_atk": 0,  "bonus_def": 0,  "bonus_exp_pct": 0.05,
+                      "req_realm": 1, "req_element": None, "req_technique": None, "cost_gold": 30, "cost_items": {}, "alignment": "中立"},
+    "lingxi_jue":    {"name": "灵息诀",       "tier": "黄阶", "desc": "感应天地灵气的法诀",
+                      "bonus_hp": 10, "bonus_atk": 1,  "bonus_def": 0,  "bonus_exp_pct": 0.0,
+                      "req_realm": 1, "req_element": None, "req_technique": None, "cost_gold": 40, "cost_items": {}, "alignment": "中立"},
+    "huntie_gong":   {"name": "混铁功",       "tier": "黄阶", "desc": "锤炼肉身的炼体功法",
+                      "bonus_hp": 20, "bonus_atk": 0,  "bonus_def": 2,  "bonus_exp_pct": 0.0,
+                      "req_realm": 2, "req_element": "土", "req_technique": None, "cost_gold": 50, "cost_items": {"yaogu": 2}, "alignment": "中立"},
+    "qingxin_jue":   {"name": "清心诀",       "tier": "黄阶", "desc": "道门入门心法，稳固道心",
+                      "bonus_hp": 5,  "bonus_atk": 0,  "bonus_def": 1,  "bonus_exp_pct": 0.08,
+                      "req_realm": 1, "req_element": None, "req_technique": None, "cost_gold": 35, "cost_items": {}, "alignment": "正道"},
+    "modao_rumen":   {"name": "魔道入门",     "tier": "黄阶", "desc": "魔道基础功法，以杀证道",
+                      "bonus_hp": 0,  "bonus_atk": 4,  "bonus_def": 0,  "bonus_exp_pct": 0.0,
+                      "req_realm": 2, "req_element": None, "req_technique": None, "cost_gold": 50, "cost_items": {}, "alignment": "魔道"},
+    # ── 玄阶·进阶 ──
+    "qingyun_jue":   {"name": "青云诀",       "tier": "玄阶", "desc": "青云镇不传之秘",
+                      "bonus_hp": 15, "bonus_atk": 3,  "bonus_def": 1,  "bonus_exp_pct": 0.1,
+                      "req_realm": 4, "req_element": None, "req_technique": "jichu_tuna", "cost_gold": 120, "cost_items": {"wanling_guo": 1}, "alignment": "正道"},
+    "xuantian_gong": {"name": "玄天功",       "tier": "玄阶", "desc": "玄天正宗的镇派功法",
+                      "bonus_hp": 30, "bonus_atk": 5,  "bonus_def": 3,  "bonus_exp_pct": 0.05,
+                      "req_realm": 4, "req_element": None, "req_technique": "lingxi_jue", "cost_gold": 150, "cost_items": {}, "alignment": "正道", "fragment_only": True},
+    "pozhen_jianfa": {"name": "破阵剑法",     "tier": "玄阶", "desc": "以力破巧的刚猛剑法",
+                      "bonus_hp": 0,  "bonus_atk": 8,  "bonus_def": 0,  "bonus_exp_pct": 0.0,
+                      "req_realm": 5, "req_element": "金", "req_technique": None, "cost_gold": 130, "cost_items": {}, "alignment": "中立"},
+    "lieyan_jue":    {"name": "烈焰诀",       "tier": "玄阶", "desc": "火属性功法，灵力化为烈焰",
+                      "bonus_hp": 10, "bonus_atk": 7,  "bonus_def": 0,  "bonus_exp_pct": 0.0,
+                      "req_realm": 4, "req_element": "火", "req_technique": None, "cost_gold": 120, "cost_items": {"huoling_hua": 2}, "alignment": "中立"},
+    "hanbing_jue":   {"name": "寒冰诀",       "tier": "玄阶", "desc": "水属性功法，灵力化为寒冰",
+                      "bonus_hp": 15, "bonus_atk": 4,  "bonus_def": 4,  "bonus_exp_pct": 0.0,
+                      "req_realm": 4, "req_element": "水", "req_technique": None, "cost_gold": 120, "cost_items": {"bingling_cao": 2}, "alignment": "中立"},
+    "kumu_jue":      {"name": "枯木诀",       "tier": "玄阶", "desc": "木属性功法，生生不息",
+                      "bonus_hp": 25, "bonus_atk": 2,  "bonus_def": 2,  "bonus_exp_pct": 0.05,
+                      "req_realm": 4, "req_element": "木", "req_technique": None, "cost_gold": 120, "cost_items": {"lingcao": 5}, "alignment": "中立"},
+    "shagui_jue":    {"name": "煞鬼诀",       "tier": "玄阶", "desc": "鬼道功法，操控阴煞之气",
+                      "bonus_hp": 0,  "bonus_atk": 10, "bonus_def": -2, "bonus_exp_pct": 0.0,
+                      "req_realm": 5, "req_element": None, "req_technique": "modao_rumen", "cost_gold": 100, "cost_items": {"yaodan": 3}, "alignment": "魔道"},
+    # ── 地阶·高阶 ──
+    "jiuyang_gong":  {"name": "九阳功",       "tier": "地阶", "desc": "至阳至刚的绝世功法",
+                      "bonus_hp": 50, "bonus_atk": 8,  "bonus_def": 2,  "bonus_exp_pct": 0.15,
+                      "req_realm": 7, "req_element": "火", "req_technique": "lieyan_jue", "cost_gold": 400, "cost_items": {"huoling_hua": 3}, "alignment": "正道", "fragment_only": True},
+    "taiyi_jue":     {"name": "太乙诀",       "tier": "地阶", "desc": "道门正宗的无上法诀",
+                      "bonus_hp": 40, "bonus_atk": 4,  "bonus_def": 8,  "bonus_exp_pct": 0.1,
+                      "req_realm": 7, "req_element": None, "req_technique": "qingyun_jue", "cost_gold": 350, "cost_items": {"wudao_dan": 1}, "alignment": "正道"},
+    "tianmo_gong":   {"name": "天魔功",       "tier": "地阶", "desc": "魔道至高功法，威力惊人",
+                      "bonus_hp": 30, "bonus_atk": 12, "bonus_def": 0,  "bonus_exp_pct": 0.0,
+                      "req_realm": 8, "req_element": None, "req_technique": "shagui_jue", "cost_gold": 300, "cost_items": {"yaodan": 5}, "alignment": "魔道", "fragment_only": True},
+    "wuxing_huanhua":{"name": "五行幻化术",   "tier": "地阶", "desc": "以五行之力幻化万物",
+                      "bonus_hp": 20, "bonus_atk": 6,  "bonus_def": 6,  "bonus_exp_pct": 0.1,
+                      "req_realm": 7, "req_element": None, "req_technique": "xuantian_gong", "cost_gold": 380, "cost_items": {"wanling_guo": 2}, "alignment": "中立"},
+    "poxu_jianfa":   {"name": "破虚剑法",     "tier": "地阶", "desc": "一剑破虚空的绝世剑法",
+                      "bonus_hp": 0,  "bonus_atk": 15, "bonus_def": 0,  "bonus_exp_pct": 0.0,
+                      "req_realm": 8, "req_element": "金", "req_technique": "pozhen_jianfa", "cost_gold": 350, "cost_items": {"tianwai_yuntie": 2}, "alignment": "中立"},
+    "bubu_shenghua": {"name": "步步生花",     "tier": "地阶", "desc": "木属性至高功法，脚下花开，万物复苏",
+                      "bonus_hp": 60, "bonus_atk": 3,  "bonus_def": 5,  "bonus_exp_pct": 0.12,
+                      "req_realm": 7, "req_element": "木", "req_technique": "kumu_jue", "cost_gold": 350, "cost_items": {"fengxue_hua": 1}, "alignment": "正道"},
+    # ── 天阶·绝世 ──
+    "hundun_jue":    {"name": "混沌诀",       "tier": "天阶", "desc": "上古大能遗留的无上功法",
+                      "bonus_hp": 80, "bonus_atk": 15, "bonus_def": 10, "bonus_exp_pct": 0.2,
+                      "req_realm": 10, "req_element": None, "req_technique": "wuxing_huanhua", "cost_gold": 800, "cost_items": {"zijin_kuang": 3}, "alignment": "中立", "fragment_only": True},
+    "lunhui_jue":    {"name": "轮回诀",       "tier": "天阶", "desc": "参悟生死轮回，超脱三界",
+                      "bonus_hp": 100,"bonus_atk": 10, "bonus_def": 15, "bonus_exp_pct": 0.25,
+                      "req_realm": 12, "req_element": None, "req_technique": "taiyi_jue", "cost_gold": 1200, "cost_items": {"jiuhuan_cao": 2, "fengxue_hua": 1}, "alignment": "正道"},
+    "tianmo_bian":   {"name": "天魔变",       "tier": "天阶", "desc": "化身天魔，万法不侵",
+                      "bonus_hp": 50, "bonus_atk": 25, "bonus_def": 5,  "bonus_exp_pct": 0.0,
+                      "req_realm": 11, "req_element": None, "req_technique": "tianmo_gong", "cost_gold": 1000, "cost_items": {"longxian_cao": 2, "yaodan": 8}, "alignment": "魔道"},
+    "jiujian_xianfa":{"name": "九剑仙法",     "tier": "天阶", "desc": "传说中的仙人剑法，九剑合一",
+                      "bonus_hp": 20, "bonus_atk": 30, "bonus_def": 5,  "bonus_exp_pct": 0.0,
+                      "req_realm": 10, "req_element": "金", "req_technique": "poxu_jianfa", "cost_gold": 800, "cost_items": {"tianwai_yuntie": 3, "zijin_kuang": 2}, "alignment": "中立"},
+    "qingyun_midian":{"name": "青云秘典",     "tier": "天阶", "desc": "青云宗镇宗之宝，历代真传弟子方可修习",
+                      "bonus_hp": 70, "bonus_atk": 12, "bonus_def": 10, "bonus_exp_pct": 0.15,
+                      "req_realm": 9, "req_element": None, "req_technique": "qingyun_jue", "cost_gold": 0, "cost_items": {}, "alignment": "正道"},
+}
+
+# 正魔道冲突矩阵：alignment_a + alignment_b -> 冲突惩罚系数 (0=无冲突, 1=严重冲突)
+ALIGNMENT_CONFLICTS = {
+    ("正道", "魔道"): 1.0,
+    ("魔道", "正道"): 1.0,
+    ("正道", "中立"): 0.0,
+    ("中立", "正道"): 0.0,
+    ("魔道", "中立"): 0.0,
+    ("中立", "魔道"): 0.0,
+    ("中立", "中立"): 0.0,
+    ("正道", "正道"): 0.0,
+    ("魔道", "魔道"): 0.0,
 }
 
 # ═══════════════ 经脉系统 ═══════════════

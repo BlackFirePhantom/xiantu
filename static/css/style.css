@@ -392,6 +392,13 @@ a:hover { color: #a8d8ea; text-decoration: underline; }
 .mer-desc { color: #6a8a7a; font-size: 12px; margin-top: 4px; }
 .mer-req { color: #5a7a6a; font-size: 11px; margin-top: 2px; }
 
+/* ===== 功法限制标签 ===== */
+.tech-tag { font-size: 10px; padding: 1px 6px; border-radius: 3px; background: #1a2018; margin-left: 4px; }
+.tag-element { color: #d4b870; border: 1px solid #3a3a20; }
+.tech-lock { color: #d45555; font-size: 11px; margin-top: 2px; }
+.tech-conflict { color: #f08080; font-size: 11px; font-weight: bold; margin-top: 2px; }
+.tech-entry.conflict { border-color: #5a2a2a; }
+
 /* ===== 坊市分类标题 ===== */
 .shop-cat-header {
     color: #4a7a5a;

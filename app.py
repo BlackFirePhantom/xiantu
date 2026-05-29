@@ -18,7 +18,7 @@ from game_data import (
     LOCATIONS, MONSTERS, ITEMS, DROP_TABLE, PET_EGG_MONSTER_DROPS, MAP_MONSTER_DROPS,
     TREASURE_TABLES, FRAGMENT_RECIPES, EXP_PER_LEVEL, MAX_LEVEL,
     BREAKTHROUGH_CHANCE, REALMS, SPIRIT_ROOTS, TECHNIQUES, MERIDIANS,
-    RECIPES, FORTUNE_EVENTS, SURPRISE_EVENTS, ELEMENT_COUNTER,
+    ALIGNMENT_CONFLICTS, RECIPES, FORTUNE_EVENTS, SURPRISE_EVENTS, ELEMENT_COUNTER,
     FORGE_RECIPES, FORGE_REALM_BONUS_PER_LV,
     PET_SPECIES, PET_EGG_TIERS, PET_BATTLE_RATIO, PET_EXP_PER_LEVEL, PET_MAX_LEVEL,
     realm_name, spawn_monster, roll_spirit_root, generate_equip, lookup_item,
@@ -1063,19 +1063,65 @@ def handle_learn_technique(data):
         return
     t = TECHNIQUES[tid]
     learned = json.loads(char["techniques"]) if char["techniques"] else []
+
+    # 条件1：已学习
     if tid in learned:
         emit("game_msg", {"text": f"你已经领悟了【{t['name']}】。", "type": "error"})
         return
+    # 条件2：残卷限定
+    if t.get("fragment_only"):
+        emit("game_msg", {"text": f"【{t['name']}】只能通过集齐残卷领悟。", "type": "error"})
+        return
+    # 条件3：境界要求
     if char["level"] < t["req_realm"]:
         emit("game_msg", {"text": f"境界不足，需要{realm_name(t['req_realm'])}才能领悟。", "type": "error"})
         return
-    cost = t["req_realm"] * 50
-    if char["gold"] < cost:
-        emit("game_msg", {"text": f"参悟功法需要 {cost} 灵石，灵石不足。", "type": "error"})
+    # 条件4：灵根要求
+    if t.get("req_element"):
+        sr_id = char["spirit_root"]
+        sr = SPIRIT_ROOTS.get(sr_id, {})
+        sr_element = sr.get("element")
+        if sr_element != t["req_element"] and sr_id != "tian" and sr_id != "huntian":
+            emit("game_msg", {"text": f"灵根不符，需要{t['req_element']}灵根才能修炼此功法。你的灵根属性为{sr_element or '无属性'}。", "type": "error"})
+            return
+    # 条件5：前置功法
+    if t.get("req_technique"):
+        if t["req_technique"] not in learned:
+            pre = TECHNIQUES.get(t["req_technique"], {})
+            emit("game_msg", {"text": f"需要先领悟【{pre.get('name', t['req_technique'])}】。", "type": "error"})
+            return
+    # 条件6：灵石消耗
+    cost_gold = t.get("cost_gold", t["req_realm"] * 50)
+    if char["gold"] < cost_gold:
+        emit("game_msg", {"text": f"参悟功法需要 {cost_gold} 灵石，灵石不足。", "type": "error"})
         return
+    # 条件7：物品消耗
+    cost_items = t.get("cost_items", {})
+    if cost_items:
+        inv = get_character_inventory(session["user_id"])
+        for iid, cnt in cost_items.items():
+            if inv.get(iid, 0) < cnt:
+                emit("game_msg", {"text": f"需要【{ITEMS.get(iid,{}).get('name',iid)}】x{cnt}，材料不足。", "type": "error"})
+                return
+        for iid, cnt in cost_items.items():
+            inv[iid] -= cnt
+            if inv[iid] <= 0: del inv[iid]
+        set_character_inventory(session["user_id"], inv)
+    # 条件8：正魔道冲突检查
+    if t.get("alignment") and t["alignment"] != "中立":
+        for lid in learned:
+            lt = TECHNIQUES.get(lid, {})
+            la = lt.get("alignment", "中立")
+            if la != "中立" and la != t["alignment"]:
+                conflict_key = (la, t["alignment"])
+                if ALIGNMENT_CONFLICTS.get(conflict_key, 0) > 0:
+                    emit("game_msg", {"text": f"警告：【{t['name']}】（{t['alignment']}）与已学【{lt['name']}】（{la}）存在道法冲突！同时修炼可能影响突破。", "type": "error"})
+                    # 仍然允许学习，但发出警告
+
+    # 扣除灵石并学习
     learned.append(tid)
-    update_character(session["user_id"], techniques=json.dumps(learned), gold=char["gold"] - cost)
-    emit("game_msg", {"text": f"你耗费 {cost} 灵石，潜心参悟，终于领悟了【{t['name']}】（{t['tier']}）！", "type": "buff"})
+    update_character(session["user_id"], techniques=json.dumps(learned), gold=char["gold"] - cost_gold)
+    emit("game_msg", {"text": f"你耗费 {cost_gold} 灵石，潜心参悟，终于领悟了【{t['name']}】（{t['tier']}）！", "type": "buff"})
     handle_get_state()
 
 
@@ -1396,13 +1442,60 @@ def handle_get_techniques():
     char = get_character(session["user_id"])
     if not char: return
     learned = json.loads(char["techniques"]) if char["techniques"] else []
+    sr_id = char["spirit_root"]
+    sr = SPIRIT_ROOTS.get(sr_id, {})
+    sr_element = sr.get("element")
+    is_tian = sr_id in ("tian", "huntian")
+
     available = []
     for tid, t in TECHNIQUES.items():
-        if tid not in learned:
-            cost = t["req_realm"] * 50
-            available.append({"id": tid, "name": t["name"], "tier": t["tier"], "desc": t["desc"],
-                              "req_realm": realm_name(t["req_realm"]), "cost": cost,
-                              "unlockable": char["level"] >= t["req_realm"] and char["gold"] >= cost})
+        if tid in learned: continue
+        if t.get("fragment_only"): continue  # 残卷功法不在列表显示
+
+        cost_gold = t.get("cost_gold", t["req_realm"] * 50)
+        cost_items = t.get("cost_items", {})
+
+        # 检查所有条件
+        reasons = []
+        can_learn = True
+        if char["level"] < t["req_realm"]:
+            reasons.append(f"需{realm_name(t['req_realm'])}")
+            can_learn = False
+        if t.get("req_element") and not is_tian and sr_element != t["req_element"]:
+            reasons.append(f"需{t['req_element']}灵根")
+            can_learn = False
+        if t.get("req_technique") and t["req_technique"] not in learned:
+            pre_name = TECHNIQUES.get(t["req_technique"], {}).get("name", "?")
+            reasons.append(f"需先学{pre_name}")
+            can_learn = False
+        if char["gold"] < cost_gold:
+            reasons.append(f"需{cost_gold}灵石")
+            can_learn = False
+        for iid, cnt in cost_items.items():
+            reasons.append(f"需{ITEMS.get(iid,{}).get('name','?')}x{cnt}")
+
+        alignment = t.get("alignment", "中立")
+        # 检查正魔道冲突
+        has_conflict = False
+        if alignment != "中立":
+            for lid in learned:
+                lt = TECHNIQUES.get(lid, {})
+                la = lt.get("alignment", "中立")
+                if la != "中立" and la != alignment:
+                    has_conflict = True
+                    break
+
+        available.append({
+            "id": tid, "name": t["name"], "tier": t["tier"], "desc": t["desc"],
+            "req_realm": realm_name(t["req_realm"]), "cost_gold": cost_gold,
+            "cost_items": [{"name": ITEMS.get(iid,{}).get("name","?"), "need": cnt} for iid, cnt in cost_items.items()],
+            "req_element": t.get("req_element"),
+            "req_technique": t.get("req_technique"),
+            "alignment": alignment,
+            "reasons": reasons,
+            "can_learn": can_learn,
+            "has_conflict": has_conflict,
+        })
     emit("techniques_list", {"available": available, "learned": learned})
 
 

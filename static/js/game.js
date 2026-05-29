@@ -331,18 +331,60 @@ function renderTechniques(data) {
     if (data.available.length === 0) {
         availDiv.innerHTML = '<div style="color:#3a4a42;font-size:12px;">暂无可学功法</div>';
     }
-    data.available.forEach((t) => {
-        const entry = document.createElement("div");
-        entry.className = "tech-entry" + (t.unlockable ? " unlockable" : " locked");
-        entry.innerHTML = `<div><span class="tech-name">${t.name}</span><span class="tech-tier">${t.tier}</span></div><div class="tech-desc">${t.desc}</div><div class="tech-req">需${t.req_realm} | 消耗${t.cost}灵石</div>`;
-        if (t.unlockable) {
-            const btn = document.createElement("button");
-            btn.className = "btn btn-sm btn-learn";
-            btn.textContent = "参悟";
-            btn.onclick = (e) => { e.stopPropagation(); socket.emit("learn_technique", { technique: t.id }); };
-            entry.appendChild(btn);
-        }
-        availDiv.appendChild(entry);
+
+    // 按品阶分组
+    const tierOrder = ["黄阶","玄阶","地阶","天阶"];
+    const groups = {};
+    data.available.forEach(t => {
+        if (!groups[t.tier]) groups[t.tier] = [];
+        groups[t.tier].push(t);
+    });
+
+    const alignColors = {"正道":"#7eb8da","魔道":"#d45555","中立":"#8b949e"};
+
+    tierOrder.forEach(tier => {
+        const items = groups[tier];
+        if (!items || items.length === 0) return;
+        const hdr = document.createElement("div");
+        hdr.className = "forge-cat-header";
+        hdr.textContent = `━━ ${tier} ━━`;
+        availDiv.appendChild(hdr);
+
+        items.forEach((t) => {
+            const entry = document.createElement("div");
+            entry.className = "tech-entry" + (t.can_learn ? " unlockable" : " locked");
+            if (t.has_conflict) entry.classList.add("conflict");
+
+            let tags = [];
+            if (t.req_element) tags.push(`<span class="tech-tag tag-element">需${t.req_element}灵根</span>`);
+            if (t.alignment !== "中立") tags.push(`<span class="tech-tag" style="color:${alignColors[t.alignment]}">${t.alignment}</span>`);
+            let reqStr = `需${t.req_realm}`;
+            if (t.cost_gold) reqStr += ` | ${t.cost_gold}灵石`;
+            if (t.cost_items.length > 0) reqStr += ` | ${t.cost_items.map(i=>i.name+'x'+i.need).join(' ')}`;
+
+            let lockReason = "";
+            if (!t.can_learn && t.reasons.length > 0) {
+                lockReason = `<div class="tech-lock">${t.reasons.join(' · ')}</div>`;
+            }
+            if (t.has_conflict) {
+                lockReason += `<div class="tech-conflict">正魔道冲突！</div>`;
+            }
+
+            entry.innerHTML = `
+                <div><span class="tech-name">${t.name}</span> ${tags.join(' ')}</div>
+                <div class="tech-desc">${t.desc}</div>
+                <div class="tech-req">${reqStr}</div>
+                ${lockReason}
+            `;
+            if (t.can_learn) {
+                const btn = document.createElement("button");
+                btn.className = "btn btn-sm btn-learn";
+                btn.textContent = "参悟";
+                btn.onclick = (e) => { e.stopPropagation(); socket.emit("learn_technique", { technique: t.id }); };
+                entry.appendChild(btn);
+            }
+            availDiv.appendChild(entry);
+        });
     });
     document.getElementById("tech-modal").style.display = "flex";
 }
