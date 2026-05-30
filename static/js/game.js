@@ -280,9 +280,6 @@ function renderShop() {
         // 灵宠基础
         { id: "egg_common",    name: "灵兽蛋",     desc: "孵化普通灵宠",     price: 80,  cat: "灵宠" },
         { id: "pet_feed",      name: "灵兽饲料",   desc: "灵宠经验+10",      price: 15,  cat: "灵宠" },
-        // 基础材料
-        { id: "map_common",    name: "残破藏宝图", desc: "一档宝藏",         price: 60,  cat: "杂物" },
-        { id: "map_compass",   name: "寻宝罗盘",   desc: "提升藏宝图品质",   price: 150, cat: "杂物" },
     ];
     const div = document.getElementById("shop-list");
     div.innerHTML = "";

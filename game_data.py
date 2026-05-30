@@ -694,12 +694,12 @@ PET_EGG_MONSTER_DROPS = {
 # 部分怪物额外掉落藏宝图
 MAP_MONSTER_DROPS = {
     "rogue_cultivator":  [("map_common", 0.06)],
-    "wolf_king":         [("map_common", 0.08)],
-    "cave_troll_yao":    [("map_common", 0.10), ("map_rare", 0.03)],
-    "mine_demon_chief":  [("map_rare", 0.06)],
-    "demonic_cultivator":[("map_rare", 0.08), ("map_legend", 0.02)],
-    "shadow_demon":      [("map_rare", 0.10), ("map_legend", 0.03)],
-    "flood_dragon":      [("map_rare", 0.12), ("map_legend", 0.05)],
+    "wolf_king":         [("map_common", 0.08), ("map_compass", 0.03)],
+    "cave_troll_yao":    [("map_common", 0.10), ("map_rare", 0.03), ("map_compass", 0.04)],
+    "mine_demon_chief":  [("map_rare", 0.06), ("map_compass", 0.05)],
+    "demonic_cultivator":[("map_rare", 0.08), ("map_legend", 0.02), ("map_compass", 0.06)],
+    "shadow_demon":      [("map_rare", 0.10), ("map_legend", 0.03), ("map_compass", 0.08)],
+    "flood_dragon":      [("map_rare", 0.12), ("map_legend", 0.05), ("map_compass", 0.10)],
 }
 
 # ═══════════════ 怪物生成 ═══════════════

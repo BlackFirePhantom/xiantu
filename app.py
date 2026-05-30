@@ -1890,6 +1890,13 @@ def handle_upgrade_map(data):
         emit("game_msg", {"text": "已经是最高品质的藏宝图了。", "type": "error"})
         return
 
+    # 等级限制
+    upgrade_req = {1: 5, 2: 10}  # tier1→2 需要5级，tier2→3 需要10级
+    req_lv = upgrade_req.get(item["map_tier"], 99)
+    if char["level"] < req_lv:
+        emit("game_msg", {"text": f"境界不足！升级到下一级藏宝图需要{realm_name(req_lv)}（当前{realm_name(char['level'])}）。", "type": "error"})
+        return
+
     inv = get_character_inventory(session["user_id"])
     if inv.get("map_compass", 0) <= 0:
         emit("game_msg", {"text": "你没有寻宝罗盘。", "type": "error"})
