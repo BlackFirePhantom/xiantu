@@ -2409,8 +2409,19 @@ def _process_auction_ticks():
             # 检查拍卖是否结束
             if now >= a["ends_at"]:
                 if a["highest_bidder"] == "player":
+                    # 玩家拍得：扣灵石 + 发放物品
+                    uid = a.get("player_user_id")
+                    if uid:
+                        char = get_character(uid)
+                        if char and char["gold"] >= a["current_price"]:
+                            update_character(uid, gold=char["gold"] - a["current_price"])
+                            inv = get_character_inventory(uid)
+                            inv[a["item_id"]] = inv.get(a["item_id"], 0) + 1
+                            set_character_inventory(uid, inv)
+                            socketio.emit("auction_log", {"text": f"你拍得了【{a['name']}】，扣除 {a['current_price']} 灵石！", "type": "shop"}, namespace="/")
+                        elif char:
+                            socketio.emit("auction_log", {"text": f"你拍得了【{a['name']}】但灵石不足，拍品流拍！", "type": "error"}, namespace="/")
                     a["won"] = True
-                    # 通知在线玩家（如果有）
                     socketio.emit("auction_update", {"auction_id": aid}, namespace="/")
                 elif a["highest_bidder"] == "npc":
                     a["sold_to_npc"] = True
@@ -2439,19 +2450,6 @@ def _process_auction_ticks():
                         socketio.emit("auction_update", {"auction_id": aid}, namespace="/")
                         changed = True
 
-def _check_auction_win(username, user_id):
-    """检查玩家赢得的拍卖品并发放"""
-    to_del = []
-    for aid, a in active_auctions.items():
-        if a.get("won") and a["highest_bidder"] == "player" and not a.get("claimed"):
-            a["claimed"] = True
-            inv = get_character_inventory(user_id)
-            inv[a["item_id"]] = inv.get(a["item_id"], 0) + 1
-            set_character_inventory(user_id, inv)
-            to_del.append(aid)
-    for aid in to_del:
-        if aid in active_auctions:
-            del active_auctions[aid]
 
 # ═══════════════ 拍卖行Socket事件 ═══════════════
 
@@ -2461,7 +2459,6 @@ def handle_get_auction():
     # 首次打开或拍品为空时初始化
     if not active_auctions:
         _refresh_auctions()
-    _check_auction_win(session.get("username", ""), session["user_id"])
     now = time.time() * 1000
     items = []
     for aid, a in sorted(active_auctions.items(), key=lambda x: x[1].get("created_at", 0)):
@@ -2477,6 +2474,7 @@ def handle_get_auction():
             "ends_at": a["ends_at"],
             "won": a.get("won", False),
             "sold_to_npc": a.get("sold_to_npc", False),
+            "player_won": a.get("won") and a["highest_bidder"] == "player",
         })
     next_refresh = auction_last_refresh + AUCTION_REFRESH_INTERVAL
     emit("auction_list", {"items": items, "next_refresh": next_refresh})
@@ -2513,15 +2511,11 @@ def handle_auction_bid(data):
         emit("game_msg", {"text": f"灵石不足！你只有 {char['gold']} 灵石。", "type": "error"})
         return
 
-    # 扣除灵石，退还之前的出价（如果有）
-    prev_bid = a.get("player_bid_amount", 0)
-    new_gold = char["gold"] - amount + prev_bid
-    update_character(session["user_id"], gold=new_gold)
-
+    # 记录出价（不扣灵石，成交时才扣）
     a["current_price"] = amount
     a["highest_bidder"] = "player"
     a["bids_player"] = a.get("bids_player", 0) + 1
-    a["player_bid_amount"] = amount  # 记录玩家当前出价，后续退还用
+    a["player_user_id"] = session["user_id"]  # 记录玩家ID，成交时扣款用
 
     # 延长拍卖时间（防止最后秒杀）
     time_left = a["ends_at"] - now

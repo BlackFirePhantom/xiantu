@@ -708,8 +708,10 @@ function renderAuctionPanel(data) {
         const rn = rarityNames[item.rarity] || "凡品";
 
         let statusHtml = "";
-        if (item.won) {
-            statusHtml = '<div class="auction-status auction-status-won">已被拍走</div>';
+        if (item.player_won) {
+            statusHtml = '<div class="auction-status" style="color:#8fd4a0;font-weight:bold;">你已拍得！物品已发放至背包</div>';
+        } else if (item.won) {
+            statusHtml = '<div class="auction-status auction-status-won">已流拍</div>';
         } else if (item.sold_to_npc) {
             statusHtml = '<div class="auction-status auction-status-npc">NPC已抢先拍下</div>';
         } else {
