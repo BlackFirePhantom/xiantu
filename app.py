@@ -16,6 +16,7 @@ from models import (
 )
 from game_data import (
     LOCATIONS, MONSTERS, ITEMS, DROP_TABLE, PET_EGG_MONSTER_DROPS, MAP_MONSTER_DROPS,
+    LOCATION_UNIQUE_DROPS,
     TREASURE_TABLES, FRAGMENT_RECIPES, EXP_PER_LEVEL, MAX_LEVEL,
     BREAKTHROUGH_CHANCE, REALMS, SPIRIT_ROOTS, TECHNIQUES, MERIDIANS,
     ALIGNMENT_CONFLICTS, RECIPES, FORTUNE_EVENTS, SURPRISE_EVENTS, ELEMENT_COUNTER,
@@ -1021,6 +1022,12 @@ def handle_fight():
         # 藏宝图掉落
         if monster_id in MAP_MONSTER_DROPS:
             for item_id, chance in MAP_MONSTER_DROPS[monster_id]:
+                if random.random() < chance:
+                    drops.append(item_id)
+        # 地点独有掉落
+        loc_id = char["location"]
+        if loc_id in LOCATION_UNIQUE_DROPS:
+            for item_id, chance in LOCATION_UNIQUE_DROPS[loc_id]:
                 if random.random() < chance:
                     drops.append(item_id)
         # 战斗突发事件掉落加成

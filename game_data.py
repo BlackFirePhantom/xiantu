@@ -653,53 +653,65 @@ TREASURE_TABLES = {
 # 掉落表：monster_id -> [(item_id, 概率)]
 DROP_TABLE = {
     # 一阶妖兽 (练气期 1-3)
-    "green_wolf":        [("huiqi_dan", 0.3), ("lingcao", 0.25), ("yaogu", 0.08)],
-    "spirit_slime":      [("huiqi_dan", 0.2), ("lingcao", 0.15)],
-    "poison_snake":      [("huiqi_dan", 0.3), ("dueling_teng", 0.15), ("yaopimo", 0.08)],
-    "fire_rat":          [("huiqi_dan", 0.2), ("huoling_hua", 0.15)],
-    "wild_boar":         [("huiqi_dan", 0.4), ("cloth_robe", 0.1), ("lingcao", 0.25), ("yaogu", 0.1)],
-    "rogue_cultivator":  [("huiqi_dan", 0.3), ("tiemu_sword", 0.1), ("liliang_fulu", 0.05), ("hantie_kuang", 0.1)],
-    "blood_bat":         [("huiqi_dan", 0.25), ("dueling_teng", 0.1), ("yaopimo", 0.1)],
-    "ironback_centipede": [("huiqi_dan", 0.3), ("cloth_robe", 0.08), ("lingcao", 0.2), ("hantie_kuang", 0.1)],
+    "green_wolf":        [("huiqi_dan", 0.15), ("lingcao", 0.12), ("yaogu", 0.04)],
+    "spirit_slime":      [("huiqi_dan", 0.10), ("lingcao", 0.08)],
+    "poison_snake":      [("huiqi_dan", 0.15), ("dueling_teng", 0.08), ("yaopimo", 0.04)],
+    "fire_rat":          [("huiqi_dan", 0.10), ("huoling_hua", 0.08)],
+    "wild_boar":         [("huiqi_dan", 0.20), ("cloth_robe", 0.05), ("lingcao", 0.12), ("yaogu", 0.05)],
+    "rogue_cultivator":  [("huiqi_dan", 0.15), ("tiemu_sword", 0.05), ("liliang_fulu", 0.03), ("hantie_kuang", 0.06)],
+    "blood_bat":         [("huiqi_dan", 0.12), ("dueling_teng", 0.06), ("yaopimo", 0.05)],
+    "ironback_centipede": [("huiqi_dan", 0.15), ("cloth_robe", 0.04), ("lingcao", 0.10), ("hantie_kuang", 0.06)],
     # 二阶妖兽 (筑基期 4-6)
-    "stone_bear":        [("huichun_dan", 0.3), ("lingwen_armor", 0.1), ("bingling_cao", 0.15), ("yaogu", 0.12), ("hantie_kuang", 0.1)],
-    "wolf_king":         [("huichun_dan", 0.3), ("hantie_sword", 0.1), ("lingcao", 0.2), ("yaodan", 0.06)],
-    "soul_spider":       [("huichun_dan", 0.3), ("liliang_fulu", 0.05), ("dueling_teng", 0.15), ("yaopimo", 0.1)],
-    "ancient_tree_demon":[("huichun_dan", 0.4), ("huti_fulu", 0.08), ("wanling_guo", 0.1), ("yaogu", 0.1)],
-    "rock_beast":        [("huiqi_dan", 0.4), ("hantie_sword", 0.08), ("bingling_cao", 0.1), ("hantie_kuang", 0.15)],
-    "wind_yao":          [("huichun_dan", 0.3), ("liliang_fulu", 0.05), ("huoling_hua", 0.1), ("yaopimo", 0.08)],
-    "purple_eagle":      [("huichun_dan", 0.3), ("peiyuan_dan", 0.1), ("wanling_guo", 0.1), ("yaodan", 0.08)],
+    "stone_bear":        [("huichun_dan", 0.15), ("lingwen_armor", 0.05), ("bingling_cao", 0.08), ("yaogu", 0.06), ("hantie_kuang", 0.06)],
+    "wolf_king":         [("huichun_dan", 0.15), ("hantie_sword", 0.05), ("lingcao", 0.10), ("yaodan", 0.03)],
+    "soul_spider":       [("huichun_dan", 0.15), ("liliang_fulu", 0.03), ("dueling_teng", 0.08), ("yaopimo", 0.05)],
+    "ancient_tree_demon":[("huichun_dan", 0.20), ("huti_fulu", 0.04), ("wanling_guo", 0.05), ("yaogu", 0.06)],
+    "rock_beast":        [("huiqi_dan", 0.20), ("hantie_sword", 0.04), ("bingling_cao", 0.06), ("hantie_kuang", 0.08)],
+    "wind_yao":          [("huichun_dan", 0.15), ("liliang_fulu", 0.03), ("huoling_hua", 0.06), ("yaopimo", 0.04)],
+    "purple_eagle":      [("huichun_dan", 0.15), ("peiyuan_dan", 0.05), ("wanling_guo", 0.06), ("yaodan", 0.04)],
     # 三阶妖兽 (结丹期 7-9)
-    "mine_demon_chief":  [("hantie_sword", 0.12), ("lingwen_armor", 0.1), ("liliang_fulu", 0.05), ("bingling_cao", 0.15), ("xuanjin_shi", 0.08), ("yaodan", 0.1)],
-    "cave_troll_yao":    [("qinggang_sword", 0.08), ("xuantie_armor", 0.06), ("huichun_dan", 0.4), ("wanling_guo", 0.12), ("xuanjin_shi", 0.1), ("yaodan", 0.12)],
+    "mine_demon_chief":  [("hantie_sword", 0.06), ("lingwen_armor", 0.05), ("liliang_fulu", 0.03), ("bingling_cao", 0.08), ("xuanjin_shi", 0.05), ("yaodan", 0.06)],
+    "cave_troll_yao":    [("qinggang_sword", 0.04), ("xuantie_armor", 0.03), ("huichun_dan", 0.20), ("wanling_guo", 0.06), ("xuanjin_shi", 0.06), ("yaodan", 0.06)],
     # 四阶妖兽 (元婴期 10-11)
-    "demonic_cultivator":[("liliang_fulu", 0.1), ("qinggang_sword", 0.08), ("pojing_dan", 0.02), ("huoling_hua", 0.1), ("tianwai_yuntie", 0.06), ("jiuhuan_cao", 0.05)],
-    "shadow_demon":      [("zhanlong_sword", 0.04), ("longlin_armor", 0.03), ("pojing_dan", 0.03), ("wanling_guo", 0.1), ("tianwai_yuntie", 0.08), ("longxian_cao", 0.04)],
+    "demonic_cultivator":[("liliang_fulu", 0.05), ("qinggang_sword", 0.04), ("pojing_dan", 0.01), ("huoling_hua", 0.06), ("tianwai_yuntie", 0.04), ("jiuhuan_cao", 0.03)],
+    "shadow_demon":      [("zhanlong_sword", 0.02), ("longlin_armor", 0.02), ("pojing_dan", 0.02), ("wanling_guo", 0.06), ("tianwai_yuntie", 0.05), ("longxian_cao", 0.03)],
     # 五阶妖兽 (化神+ 12+)
-    "flood_dragon":      [("longlin_armor", 0.05), ("huichun_dan", 0.5), ("pojing_dan", 0.05), ("wanling_guo", 0.2), ("longxian_cao", 0.08), ("zijin_kuang", 0.06)],
-    "ancient_true_dragon":[("zhanlong_sword", 0.12), ("longlin_armor", 0.08), ("pojing_dan", 0.1), ("liliang_fulu", 0.15), ("huti_fulu", 0.15), ("wanling_guo", 0.25), ("fengxue_hua", 0.08), ("zijin_kuang", 0.1)],
+    "flood_dragon":      [("longlin_armor", 0.03), ("huichun_dan", 0.25), ("pojing_dan", 0.03), ("wanling_guo", 0.10), ("longxian_cao", 0.05), ("zijin_kuang", 0.04)],
+    "ancient_true_dragon":[("zhanlong_sword", 0.06), ("longlin_armor", 0.04), ("pojing_dan", 0.05), ("liliang_fulu", 0.08), ("huti_fulu", 0.08), ("wanling_guo", 0.12), ("fengxue_hua", 0.05), ("zijin_kuang", 0.06)],
+}
+
+# 地点独有掉落（只有在该地点斩妖才能获得）
+LOCATION_UNIQUE_DROPS = {
+    "fallenwood_forest": [("lingcao", 0.15)],           # 落霞林：灵草丰茂
+    "luoxia_plains":     [("pet_feed", 0.08)],          # 苍茫草原：灵兽饲料
+    "yaoshou_deepwood":  [("wanling_guo", 0.06), ("bingling_cao", 0.08)],  # 妖兽密林：稀有灵草
+    "spirit_cave":       [("hantie_kuang", 0.12), ("xuanjin_shi", 0.06)],  # 灵矿洞穴：矿石
+    "cangyun_mountain":  [("tianwai_yuntie", 0.05)],    # 苍云山：天外陨铁
+    "mine_depth":        [("zijin_kuang", 0.04), ("xuanjin_shi", 0.10)],   # 矿脉深处：极品矿石
+    "youming_altar":     [("jiuhuan_cao", 0.04), ("longxian_cao", 0.03)],  # 幽冥祭坛：魔草
+    "tribulation_peak":  [("fengxue_hua", 0.04), ("tianwai_yuntie", 0.06)],# 天劫峰：凤血花
 }
 
 # 部分怪物额外掉落宠物蛋
 PET_EGG_MONSTER_DROPS = {
-    "wolf_king":         [("egg_common", 0.10)],
-    "ancient_tree_demon":[("egg_common", 0.08)],
-    "purple_eagle":      [("egg_rare", 0.06)],
-    "cave_troll_yao":    [("egg_common", 0.08), ("egg_rare", 0.03)],
-    "demonic_cultivator":[("egg_rare", 0.05)],
-    "shadow_demon":      [("egg_rare", 0.06), ("egg_legend", 0.01)],
-    "flood_dragon":      [("egg_rare", 0.10), ("egg_legend", 0.03)],
+    "wolf_king":         [("egg_common", 0.05)],
+    "ancient_tree_demon":[("egg_common", 0.04)],
+    "purple_eagle":      [("egg_rare", 0.03)],
+    "cave_troll_yao":    [("egg_common", 0.04), ("egg_rare", 0.02)],
+    "demonic_cultivator":[("egg_rare", 0.03)],
+    "shadow_demon":      [("egg_rare", 0.04), ("egg_legend", 0.01)],
+    "flood_dragon":      [("egg_rare", 0.06), ("egg_legend", 0.02)],
 }
 
 # 部分怪物额外掉落藏宝图
 MAP_MONSTER_DROPS = {
-    "rogue_cultivator":  [("map_common", 0.06)],
-    "wolf_king":         [("map_common", 0.08), ("map_compass", 0.03)],
-    "cave_troll_yao":    [("map_common", 0.10), ("map_rare", 0.03), ("map_compass", 0.04)],
-    "mine_demon_chief":  [("map_rare", 0.06), ("map_compass", 0.05)],
-    "demonic_cultivator":[("map_rare", 0.08), ("map_legend", 0.02), ("map_compass", 0.06)],
-    "shadow_demon":      [("map_rare", 0.10), ("map_legend", 0.03), ("map_compass", 0.08)],
-    "flood_dragon":      [("map_rare", 0.12), ("map_legend", 0.05), ("map_compass", 0.10)],
+    "rogue_cultivator":  [("map_common", 0.03)],
+    "wolf_king":         [("map_common", 0.05), ("map_compass", 0.02)],
+    "cave_troll_yao":    [("map_common", 0.06), ("map_rare", 0.02), ("map_compass", 0.03)],
+    "mine_demon_chief":  [("map_rare", 0.04), ("map_compass", 0.03)],
+    "demonic_cultivator":[("map_rare", 0.05), ("map_legend", 0.01), ("map_compass", 0.04)],
+    "shadow_demon":      [("map_rare", 0.06), ("map_legend", 0.02), ("map_compass", 0.05)],
+    "flood_dragon":      [("map_rare", 0.08), ("map_legend", 0.03), ("map_compass", 0.06)],
 }
 
 # ═══════════════ 怪物生成 ═══════════════
