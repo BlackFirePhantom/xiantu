@@ -220,30 +220,69 @@ function renderInventory(items) {
         div.innerHTML = '<div style="color:#3a4a42;font-size:12px;padding:4px;">储物袋空空如也</div>';
         return;
     }
-    items.forEach((item) => {
-        const entry = document.createElement("div");
-        entry.className = "item-entry";
-        // 特殊物品显示操作按钮
-        let actionHtml = "";
-        if (item.id.startsWith("map_") && item.id !== "map_compass") {
-            actionHtml = `<button class="btn btn-sm btn-map-action" onclick="socket.emit('use_map',{item:'${item.id}'})">寻宝</button>`;
-            // 检查是否有罗盘可升级
-            const hasCompass = (gameState.inventory || []).find(i => i.id === "map_compass");
-            if (hasCompass && item.id !== "map_legend") {
-                actionHtml += `<button class="btn btn-sm btn-compass-action" onclick="socket.emit('upgrade_map',{item:'${item.id}'})">罗盘升级</button>`;
-            }
-        }
-        if (item.id.startsWith("frag_")) {
-            const group = item.id.replace(/_\d+$/, "").replace("frag_", "");
-            actionHtml = `<button class="btn btn-sm btn-frag-action" onclick="socket.emit('combine_fragments',{group:'${group}'})">合成功法</button>`;
-        }
-        entry.innerHTML = `<span><span class="item-name">${item.name}</span><span class="item-count">x${item.count}</span></span>${actionHtml}`;
-        entry.title = item.desc;
-        if (!actionHtml) {
-            entry.onclick = () => socket.emit("use_item", { item: item.id });
-        }
-        div.appendChild(entry);
+
+    // 分类映射
+    const catMap = {
+        "consumable": "消耗品", "material": "材料", "equip": "装备",
+        "pet_egg": "灵宠", "pet_food": "灵宠",
+        "treasure_map": "藏宝图", "map_upgrade": "藏宝图",
+        "technique_fragment": "功法残卷",
+    };
+    const catOrder = ["装备", "消耗品", "材料", "藏宝图", "灵宠", "功法残卷"];
+    const groups = {};
+    items.forEach(item => {
+        const cat = catMap[item.type] || "其他";
+        if (!groups[cat]) groups[cat] = [];
+        groups[cat].push(item);
     });
+
+    catOrder.forEach(cat => {
+        const catItems = groups[cat];
+        if (!catItems) return;
+        const header = document.createElement("div");
+        header.className = "shop-cat-header";
+        header.textContent = `━━ ${cat} ━━`;
+        div.appendChild(header);
+
+        catItems.forEach((item) => {
+            const entry = document.createElement("div");
+            entry.className = "item-entry";
+            let actionHtml = "";
+            if (item.id.startsWith("map_") && item.id !== "map_compass") {
+                actionHtml = `<button class="btn btn-sm btn-map-action" onclick="socket.emit('use_map',{item:'${item.id}'})">寻宝</button>`;
+                const hasCompass = (gameState.inventory || []).find(i => i.id === "map_compass");
+                if (hasCompass && item.id !== "map_legend") {
+                    actionHtml += `<button class="btn btn-sm btn-compass-action" onclick="socket.emit('upgrade_map',{item:'${item.id}'})">罗盘升级</button>`;
+                }
+            }
+            if (item.id.startsWith("frag_")) {
+                const group = item.id.replace(/_\d+$/, "").replace("frag_", "");
+                actionHtml = `<button class="btn btn-sm btn-frag-action" onclick="socket.emit('combine_fragments',{group:'${group}'})">合成功法</button>`;
+            }
+            entry.innerHTML = `<span><span class="item-name">${item.name}</span><span class="item-count">x${item.count}</span></span>${actionHtml}`;
+            entry.title = item.desc;
+            if (!actionHtml) {
+                entry.onclick = () => socket.emit("use_item", { item: item.id });
+            }
+            div.appendChild(entry);
+        });
+    });
+
+    // "其他"分类
+    if (groups["其他"]) {
+        const header = document.createElement("div");
+        header.className = "shop-cat-header";
+        header.textContent = "━━ 其他 ━━";
+        div.appendChild(header);
+        groups["其他"].forEach(item => {
+            const entry = document.createElement("div");
+            entry.className = "item-entry";
+            entry.innerHTML = `<span><span class="item-name">${item.name}</span><span class="item-count">x${item.count}</span></span>`;
+            entry.title = item.desc;
+            entry.onclick = () => socket.emit("use_item", { item: item.id });
+            div.appendChild(entry);
+        });
+    }
 }
 
 // ═══════════════ 坊市 ═══════════════

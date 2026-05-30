@@ -394,7 +394,7 @@ def handle_get_state():
     for item_id, count in inv.items():
         item = lookup_item(item_id)
         if item:
-            inv_display.append({"id": item_id, "name": item["name"], "count": count, "desc": item.get("desc", "")})
+            inv_display.append({"id": item_id, "name": item["name"], "count": count, "desc": item.get("desc", ""), "type": item.get("type", "misc")})
 
     equip_info = {"weapon": None, "armor": None, "accessory": None}
     w = lookup_item(char["weapon"]) if char["weapon"] else None
@@ -1894,8 +1894,15 @@ def handle_upgrade_map(data):
     upgrade_req = {1: 5, 2: 10}  # tier1→2 需要5级，tier2→3 需要10级
     req_lv = upgrade_req.get(item["map_tier"], 99)
     if char["level"] < req_lv:
-        emit("game_msg", {"text": f"境界不足！升级到下一级藏宝图需要{realm_name(req_lv)}（当前{realm_name(char['level'])}）。", "type": "error"})
+        emit("game_msg", {"text": f"境界不足！升级需要{realm_name(req_lv)}（当前{realm_name(char['level'])}）。", "type": "error"})
         return
+
+    # 材料限制
+    upgrade_mats = {
+        1: {"yaogu": 3, "hantie_kuang": 2},       # 残破→完整
+        2: {"yaodan": 2, "xuanjin_shi": 3, "tianwai_yuntie": 1},  # 完整→上古
+    }
+    need_mats = upgrade_mats.get(item["map_tier"], {})
 
     inv = get_character_inventory(session["user_id"])
     if inv.get("map_compass", 0) <= 0:
@@ -1905,9 +1912,23 @@ def handle_upgrade_map(data):
         emit("game_msg", {"text": "你没有这张藏宝图。", "type": "error"})
         return
 
-    # 升级
+    # 检查材料
+    missing = []
+    for mat_id, need in need_mats.items():
+        have = inv.get(mat_id, 0)
+        if have < need:
+            mat_name = ITEMS.get(mat_id, {}).get("name", mat_id)
+            missing.append(f"{mat_name}({have}/{need})")
+    if missing:
+        emit("game_msg", {"text": f"材料不足：{'、'.join(missing)}", "type": "error"})
+        return
+
+    # 扣除材料 + 罗盘 + 旧图
     new_tier = item["map_tier"] + 1
     new_map_id = {2: "map_rare", 3: "map_legend"}[new_tier]
+    for mat_id, need in need_mats.items():
+        inv[mat_id] -= need
+        if inv[mat_id] <= 0: del inv[mat_id]
     inv[item_id] -= 1
     if inv[item_id] <= 0: del inv[item_id]
     inv["map_compass"] -= 1
