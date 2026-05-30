@@ -38,7 +38,7 @@ jobs:
         run: docker run -d --name xiantu-test -p 5000:5000 xiantu-test
 
       - name: Wait and check
-        run: sleep 3 && curl -s http://localhost:5000 | grep -q "仙途" && echo "OK"
+        run: for i in $(seq 1 10); do curl -s http://localhost:5000 | grep -q "仙途" && echo "OK" && exit 0; sleep 2; done; echo "FAIL" && exit 1
 
       - name: Cleanup
         if: always()
