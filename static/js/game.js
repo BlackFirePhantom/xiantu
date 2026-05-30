@@ -116,15 +116,6 @@ function renderState(s) {
     badge.textContent = loc.safe ? "安全" : "险地";
     badge.className = "badge " + (loc.safe ? "badge-safe" : "badge-danger");
 
-    const npcArea = document.getElementById("npc-area");
-    if (loc.npc) {
-        npcArea.style.display = "block";
-        document.getElementById("npc-name").textContent = loc.npc;
-        document.getElementById("npc-dialog").textContent = loc.npc_dialog;
-    } else {
-        npcArea.style.display = "none";
-    }
-
     document.getElementById("btn-fight").style.display = loc.safe ? "none" : "inline-block";
     document.getElementById("btn-rest").style.display = loc.safe ? "inline-block" : "none";
 
@@ -259,40 +250,26 @@ function toggleShop() {
 
 function renderShop() {
     const shopItems = [
-        // 丹药
+        // 基础丹药
         { id: "huiqi_dan",     name: "回气丹",     desc: "恢复30气血",       price: 15,  cat: "丹药" },
         { id: "huichun_dan",   name: "回春丹",     desc: "恢复80气血",       price: 40,  cat: "丹药" },
-        { id: "xuming_dan",    name: "续命丹",     desc: "恢复200气血",      price: 120, cat: "丹药" },
-        { id: "jiuzhuan_dan",  name: "九转还魂丹", desc: "气血完全恢复",     price: 350, cat: "丹药" },
         { id: "peiyuan_dan",   name: "培元丹",     desc: "获得50修为",       price: 60,  cat: "丹药" },
-        { id: "juling_dan",    name: "聚灵丹",     desc: "获得150修为",      price: 200, cat: "丹药" },
-        { id: "wudao_dan",     name: "悟道丹",     desc: "获得400修为",      price: 550, cat: "丹药" },
-        { id: "pojing_dan",    name: "破境丹",     desc: "突破必定成功",     price: 500, cat: "丹药" },
         { id: "dingdan",       name: "凝神定魄丹", desc: "下次战斗伤害+30%", price: 150, cat: "丹药" },
-        // 符箓
+        // 基础符箓
         { id: "liliang_fulu",  name: "力量符箓",   desc: "攻击+2(永久)",     price: 100, cat: "符箓" },
-        { id: "liliang_fulu2", name: "高级力量符箓",desc: "攻击+5(永久)",    price: 350, cat: "符箓" },
         { id: "huti_fulu",     name: "护体符箓",   desc: "防御+2(永久)",     price: 100, cat: "符箓" },
-        { id: "huti_fulu2",    name: "高级护体符箓",desc: "防御+5(永久)",    price: 350, cat: "符箓" },
-        { id: "qifu_fulu",     name: "祈福符箓",   desc: "气血+30(永久)",    price: 200, cat: "符箓" },
-        // 基础法宝（高阶装备需在炼器阁锻造）
-        { id: "tiemu_sword",   name: "铁木剑",     desc: "凡器·下品 攻+3",   price: 30,    cat: "法宝" },
-        { id: "cloth_robe",    name: "粗布道袍",   desc: "凡器 防+3",        price: 35,    cat: "法宝" },
-        // 饰品（基础，高阶需锻造）
-        { id: "qingyu_peidai", name: "青玉佩",     desc: "攻+2 气血+10",         price: 80,   cat: "饰品" },
-        { id: "tongqian_hufu", name: "铜钱护符",   desc: "防+2 气血+10",         price: 80,   cat: "饰品" },
-        // 灵宠
-        { id: "egg_common",    name: "灵兽蛋",     desc: "孵化普通灵宠",       price: 80,   cat: "灵宠" },
-        { id: "egg_rare",      name: "稀有灵兽蛋", desc: "孵化稀有灵宠概率更高", price: 300,  cat: "灵宠" },
-        { id: "egg_legend",    name: "传说灵兽蛋", desc: "必定孵化稀有以上",   price: 1000, cat: "灵宠" },
-        { id: "pet_feed",      name: "灵兽饲料",   desc: "灵宠经验+10",       price: 15,   cat: "灵宠" },
-        { id: "pet_feed_good", name: "高级灵兽粮", desc: "灵宠经验+50",       price: 80,   cat: "灵宠" },
-        { id: "pet_feed_best", name: "万灵精华",   desc: "灵宠经验+200",      price: 350,  cat: "灵宠" },
-        // 藏宝图
-        { id: "map_common",    name: "残破藏宝图", desc: "一档宝藏",         price: 60,   cat: "藏宝图" },
-        { id: "map_rare",      name: "完整藏宝图", desc: "二档宝藏",         price: 250,  cat: "藏宝图" },
-        { id: "map_legend",    name: "上古藏宝图", desc: "三档宝藏",         price: 800,  cat: "藏宝图" },
-        { id: "map_compass",   name: "寻宝罗盘",   desc: "提升藏宝图品质",   price: 150,  cat: "藏宝图" },
+        // 基础法宝
+        { id: "tiemu_sword",   name: "铁木剑",     desc: "凡器·下品 攻+3",   price: 30,  cat: "法宝" },
+        { id: "cloth_robe",    name: "粗布道袍",   desc: "凡器 防+3",        price: 35,  cat: "法宝" },
+        // 基础饰品
+        { id: "qingyu_peidai", name: "青玉佩",     desc: "攻+2 气血+10",     price: 80,  cat: "饰品" },
+        { id: "tongqian_hufu", name: "铜钱护符",   desc: "防+2 气血+10",     price: 80,  cat: "饰品" },
+        // 灵宠基础
+        { id: "egg_common",    name: "灵兽蛋",     desc: "孵化普通灵宠",     price: 80,  cat: "灵宠" },
+        { id: "pet_feed",      name: "灵兽饲料",   desc: "灵宠经验+10",      price: 15,  cat: "灵宠" },
+        // 基础材料
+        { id: "map_common",    name: "残破藏宝图", desc: "一档宝藏",         price: 60,  cat: "杂物" },
+        { id: "map_compass",   name: "寻宝罗盘",   desc: "提升藏宝图品质",   price: 150, cat: "杂物" },
     ];
     const div = document.getElementById("shop-list");
     div.innerHTML = "";
@@ -320,7 +297,12 @@ function renderTechniques(data) {
     learnedDiv.innerHTML = "";
     if (gameState && gameState.techniques && gameState.techniques.length > 0) {
         gameState.techniques.forEach((t) => {
-            learnedDiv.innerHTML += `<div class="tech-entry learned"><span class="tech-name">${t.name}</span><span class="tech-tier">${t.tier}</span><span class="tech-status">已领悟</span></div>`;
+            const pct = t.prof_pct || 0;
+            const barColor = pct >= 100 ? "#8fd4a0" : pct >= 50 ? "#d4b870" : "#6a8a7a";
+            learnedDiv.innerHTML += `<div class="tech-entry learned">
+                <span class="tech-name">${t.name}</span><span class="tech-tier">${t.tier}</span>
+                <div class="prof-bar-wrap"><div class="prof-bar" style="width:${pct}%;background:${barColor};"></div><span class="prof-text">${t.proficiency}/${t.max_proficiency}（${pct}%）</span></div>
+            </div>`;
         });
     } else {
         learnedDiv.innerHTML = '<div style="color:#3a4a42;font-size:12px;">尚未领悟任何功法</div>';
@@ -661,8 +643,126 @@ function showPanel(name) {
     else if (name === "pets") renderPetPanel();
 }
 function closePanel(name) {
-    const map = { tech: "tech-modal", mer: "mer-modal", alchemy: "alchemy-modal", forge: "forge-modal", pet: "pet-modal", npc: "npc-modal" };
+    const map = { tech: "tech-modal", mer: "mer-modal", alchemy: "alchemy-modal", forge: "forge-modal", pet: "pet-modal", npc: "npc-modal", auction: "auction-modal" };
     document.getElementById(map[name]).style.display = "none";
+}
+
+// ═══════════════ 拍卖行 ═══════════════
+
+socket.on("auction_list", (data) => renderAuctionPanel(data));
+socket.on("auction_update", (data) => {
+    // 单条拍卖更新，刷新面板
+    if (document.getElementById("auction-modal").style.display !== "none") {
+        socket.emit("get_auction");
+    }
+});
+socket.on("auction_log", (data) => addLog(data.text, data.type || "shop"));
+
+function showAuction() {
+    socket.emit("get_auction");
+}
+
+let auctionTimer = null;
+function renderAuctionPanel(data) {
+    const body = document.getElementById("auction-body");
+    body.innerHTML = "";
+
+    if (auctionTimer) { clearInterval(auctionTimer); auctionTimer = null; }
+
+    // 显示下次刷新时间
+    const refreshEl = document.getElementById("auction-next-refresh");
+    if (data.next_refresh) {
+        const left = Math.max(0, Math.floor((data.next_refresh - Date.now()) / 1000));
+        const h = String(Math.floor(left / 3600)).padStart(2, "0");
+        const m = String(Math.floor((left % 3600) / 60)).padStart(2, "0");
+        const s = String(left % 60).padStart(2, "0");
+        refreshEl.textContent = `下批宝物上架倒计时：${h}:${m}:${s}`;
+    }
+
+    if (!data.items || data.items.length === 0) {
+        body.innerHTML = '<div style="color:#3a4a42;font-size:13px;padding:12px;">暂无拍品，稍后再来看看。</div>';
+        document.getElementById("auction-modal").style.display = "flex";
+        return;
+    }
+
+    const rarityColors = { common: "#c8c0b0", rare: "#7eb8da", epic: "#c8a0e8", legend: "#d4b870" };
+    const rarityNames = { common: "凡品", rare: "稀有", epic: "珍品", legend: "传说" };
+
+    data.items.forEach(item => {
+        const div = document.createElement("div");
+        div.className = "auction-entry" + (item.won ? " auction-won" : "");
+        const rc = rarityColors[item.rarity] || "#c8c0b0";
+        const rn = rarityNames[item.rarity] || "凡品";
+
+        let statusHtml = "";
+        if (item.won) {
+            statusHtml = '<div class="auction-status auction-status-won">已被拍走</div>';
+        } else if (item.sold_to_npc) {
+            statusHtml = '<div class="auction-status auction-status-npc">NPC已抢先拍下</div>';
+        } else {
+            const bidder = item.highest_bidder === "player" ? "你" : (item.highest_bidder === "npc" ? "金算盘" : "无人");
+            statusHtml = `<div class="auction-status">当前最高：${bidder} ${item.current_price}灵石</div>`;
+        }
+
+        let timerHtml = "";
+        if (!item.won && !item.sold_to_npc) {
+            timerHtml = `<div class="auction-timer" data-ends="${item.ends_at}">剩余 --:--</div>`;
+        }
+
+        let btnHtml = "";
+        if (!item.won && !item.sold_to_npc) {
+            const minBid = item.current_price + item.min_increment;
+            btnHtml = `<div class="auction-bid-row">
+                <button class="btn btn-sm btn-auction-bid" onclick="socket.emit('auction_bid',{auction_id:'${item.auction_id}',amount:${minBid}})">${minBid}灵石</button>
+                <button class="btn btn-sm btn-auction-bid" onclick="socket.emit('auction_bid',{auction_id:'${item.auction_id}',amount:${item.current_price + item.min_increment * 2}})">${item.current_price + item.min_increment * 2}灵石</button>
+                <button class="btn btn-sm btn-auction-bid bid-high" onclick="socket.emit('auction_bid',{auction_id:'${item.auction_id}',amount:${item.current_price + item.min_increment * 5}})">${item.current_price + item.min_increment * 5}灵石</button>
+            </div>`;
+        }
+
+        div.innerHTML = `
+            <div class="auction-row1">
+                <span class="auction-name" style="color:${rc}">${item.name}</span>
+                <span class="auction-rarity" style="color:${rc}">[${rn}]</span>
+            </div>
+            <div class="auction-desc">${item.desc}</div>
+            ${statusHtml}
+            ${timerHtml}
+            ${btnHtml}
+        `;
+        body.appendChild(div);
+    });
+
+    // 启动倒计时
+    const nextRefresh = data.next_refresh || 0;
+    function updateTimers() {
+        const now = Date.now();
+        // 拍品倒计时
+        document.querySelectorAll(".auction-timer[data-ends]").forEach(el => {
+            const ends = parseInt(el.dataset.ends);
+            const left = Math.max(0, Math.floor((ends - now) / 1000));
+            if (left <= 0) {
+                el.textContent = "已结束";
+                el.style.color = "#d45555";
+            } else {
+                const m = String(Math.floor(left / 60)).padStart(2, "0");
+                const s = String(left % 60).padStart(2, "0");
+                el.textContent = `剩余 ${m}:${s}`;
+                el.style.color = left < 30 ? "#d45555" : left < 60 ? "#d4b870" : "#6a8a7a";
+            }
+        });
+        // 下次刷新倒计时
+        if (refreshEl && nextRefresh > 0) {
+            const rLeft = Math.max(0, Math.floor((nextRefresh - now) / 1000));
+            const rh = String(Math.floor(rLeft / 3600)).padStart(2, "0");
+            const rm = String(Math.floor((rLeft % 3600) / 60)).padStart(2, "0");
+            const rs = String(rLeft % 60).padStart(2, "0");
+            refreshEl.textContent = `下批宝物上架倒计时：${rh}:${rm}:${rs}`;
+        }
+    }
+    updateTimers();
+    auctionTimer = setInterval(updateTimers, 1000);
+
+    document.getElementById("auction-modal").style.display = "flex";
 }
 
 // ═══════════════ 操作 ═══════════════
@@ -700,22 +800,27 @@ function renderLeaderboard(data) {
 
 // ═══════════════ 日志 ═══════════════
 
+function timeStr() {
+    const d = new Date();
+    return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0") + ":" + String(d.getSeconds()).padStart(2, "0");
+}
+
 function addLog(text, type) {
     const log = document.getElementById("game-log");
     const div = document.createElement("div");
     div.className = `log-line log-${type || "fight"}`;
-    div.textContent = text;
+    div.innerHTML = `<span class="log-time">${timeStr()}</span> ${text}`;
     log.appendChild(div);
-    log.scrollTop = log.scrollHeight;
+    requestAnimationFrame(() => { log.scrollTop = log.scrollHeight; });
 }
 
 function addChat(name, text) {
     const log = document.getElementById("chat-log");
     const div = document.createElement("div");
     div.className = "chat-msg";
-    div.innerHTML = `<span class="name">${esc(name)}:</span> <span class="text">${esc(text)}</span>`;
+    div.innerHTML = `<span class="log-time">${timeStr()}</span> <span class="name">${esc(name)}:</span> <span class="text">${esc(text)}</span>`;
     log.appendChild(div);
-    log.scrollTop = log.scrollHeight;
+    requestAnimationFrame(() => { log.scrollTop = log.scrollHeight; });
 }
 
 function esc(str) { const d = document.createElement("div"); d.textContent = str; return d.innerHTML; }

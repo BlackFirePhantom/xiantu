@@ -12,7 +12,7 @@ REALMS = {
     12: ("化神期", ""), 13: ("炼虚期", ""), 14: ("合体期", ""), 15: ("大乘期", ""),
 }
 
-EXP_PER_LEVEL = [0, 0, 50, 120, 220, 360, 550, 800, 1120, 1520, 2020, 2620, 3360, 4240, 5300, 6600]
+EXP_PER_LEVEL = [0, 0, 50, 80, 130, 210, 340, 530, 820, 1260, 1940, 2990, 4610, 7100, 10940, 16860]
 MAX_LEVEL = 15
 
 BREAKTHROUGH_CHANCE = {
@@ -64,6 +64,14 @@ IDLE_MAX_HOURS = 24
 #   cost_items    : 学习消耗物品 {item_id: count}
 #   alignment     : 正道/魔道/中立 (中立=无限制)
 #   fragment_only : True 表示只能通过残卷获得
+
+# 熟练度系统
+TECHNIQUE_MAX_PROFICIENCY = 1000   # 每本功法最大熟练度
+TECHNIQUE_PROFICIENCY_TIERS = {    # 品阶 → 每次战斗获得熟练度
+    "黄阶": 8, "玄阶": 5, "地阶": 3, "天阶": 2,
+}
+# 打坐时每本功法获得熟练度（每次打坐）
+TECHNIQUE_MEDITATE_PROFICIENCY = 2
 TECHNIQUES = {
     # ── 黄阶·入门 ──
     "jichu_tuna":    {"name": "基础吐纳术",   "tier": "黄阶", "desc": "最基础的吐纳之法",

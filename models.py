@@ -90,6 +90,7 @@ def init_db():
             ("sect_contrib", "INTEGER DEFAULT 0"),
             ("daily_quest_date", "TEXT DEFAULT NULL"),
             ("npc_gift_date", "TEXT DEFAULT '{}'"),
+            ("proficiency", "TEXT DEFAULT '{}'"),
         ]:
             if not _column_exists(conn, "characters", col):
                 conn.execute(f"ALTER TABLE characters ADD COLUMN {col} {col_def}")

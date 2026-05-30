@@ -24,6 +24,7 @@ from game_data import (
     realm_name, spawn_monster, roll_spirit_root, generate_equip, lookup_item,
     hatch_egg, get_pet_stats, get_pet_exp_needed,
     IDLE_EXP_PER_SEC, IDLE_MAX_HOURS,
+    TECHNIQUE_MAX_PROFICIENCY, TECHNIQUE_PROFICIENCY_TIERS, TECHNIQUE_MEDITATE_PROFICIENCY,
 )
 from npc_data import (
     NPCS, QUESTS, NPC_GOODWILL_TIERS, SECT_RANKS,
@@ -32,7 +33,7 @@ from npc_data import (
 
 app = Flask(__name__)
 app.secret_key = secrets.token_hex(32)
-socketio = SocketIO(app, async_mode="eventlet", cors_allowed_origins="*")
+socketio = SocketIO(app, async_mode="threading", cors_allowed_origins="*")
 
 online_users = {}
 last_activity = {}     # username -> timestamp of last action
@@ -141,14 +142,16 @@ def get_full_stats(char):
         defn += ac.get("def", 0)
         max_hp += ac.get("bonus_hp", 0)
 
-    # 功法加成
+    # 功法加成（受熟练度影响）
+    prof = _get_proficiency(char)
     learned = json.loads(char["techniques"]) if char["techniques"] else []
     for tid in learned:
         if tid in TECHNIQUES:
             t = TECHNIQUES[tid]
-            max_hp += t["bonus_hp"]
-            atk += t["bonus_atk"]
-            defn += t["bonus_def"]
+            pm = _proficiency_mult(prof.get(tid, 0))
+            max_hp += int(t["bonus_hp"] * pm)
+            atk += int(t["bonus_atk"] * pm)
+            defn += int(t["bonus_def"] * pm)
 
     # 经脉加成
     opened = json.loads(char["open_meridians"]) if char["open_meridians"] else []
@@ -178,15 +181,17 @@ def get_exp_needed(level):
     return EXP_PER_LEVEL[level] if level < len(EXP_PER_LEVEL) else EXP_PER_LEVEL[-1]
 
 def get_cultivation_mult(char):
-    """获取修炼速度总倍率（灵根 × 功法）"""
+    """获取修炼速度总倍率（灵根 × 功法 × 熟练度）"""
     mult = 1.0
     sr = char["spirit_root"]
     if sr and sr in SPIRIT_ROOTS:
         mult *= SPIRIT_ROOTS[sr]["cultivation_mult"]
+    prof = _get_proficiency(char)
     learned = json.loads(char["techniques"]) if char["techniques"] else []
     for tid in learned:
         if tid in TECHNIQUES:
-            mult += TECHNIQUES[tid]["bonus_exp_pct"]
+            pm = _proficiency_mult(prof.get(tid, 0))
+            mult += TECHNIQUES[tid]["bonus_exp_pct"] * pm
     # 饰品修炼加成
     ac = lookup_item(char["accessory"]) if char["accessory"] else None
     if ac:
@@ -195,6 +200,44 @@ def get_cultivation_mult(char):
     sect_rank = get_sect_rank(char["sect_contrib"] if char["sect_contrib"] else 0)
     mult += SECT_RANKS[sect_rank]["bonus"]
     return mult
+
+# ═══════════════ 熟练度系统 ═══════════════
+
+def _get_proficiency(char):
+    return json.loads(char["proficiency"]) if char["proficiency"] else {}
+
+def _set_proficiency(uid, prof):
+    update_character(uid, proficiency=json.dumps(prof))
+
+def _proficiency_mult(prof_val):
+    """熟练度→加成倍率：0熟练度=50%效果，满熟练度=100%效果"""
+    pct = prof_val / TECHNIQUE_MAX_PROFICIENCY
+    return 0.5 + 0.5 * pct
+
+def _gain_proficiency(char, uid, source="fight"):
+    """给所有已学功法增加熟练度，返回 {tech_id: gained} 字典"""
+    learned = json.loads(char["techniques"]) if char["techniques"] else []
+    if not learned:
+        return {}
+    prof = _get_proficiency(char)
+    gained = {}
+    for tid in learned:
+        if tid not in TECHNIQUES:
+            continue
+        cur = prof.get(tid, 0)
+        if cur >= TECHNIQUE_MAX_PROFICIENCY:
+            continue
+        tier = TECHNIQUES[tid].get("tier", "黄阶")
+        if source == "fight":
+            amount = TECHNIQUE_PROFICIENCY_TIERS.get(tier, 5)
+        else:  # meditate
+            amount = TECHNIQUE_MEDITATE_PROFICIENCY
+        new_val = min(TECHNIQUE_MAX_PROFICIENCY, cur + amount)
+        prof[tid] = new_val
+        gained[tid] = amount
+    if gained:
+        _set_proficiency(uid, prof)
+    return gained
 
 def process_offline_cultivation(char):
     """计算离线挂机修为收益，返回 (gain, seconds)"""
@@ -308,20 +351,21 @@ def create():
 
 @socketio.on("connect")
 def handle_connect():
-    if "username" not in session: return False
+    if "username" not in session:
+        return False
     username = session["username"]
     online_users[username] = request.sid
     touch_activity(username)
-    emit("system_msg", {"text": f"{username} 踏入了修仙界"}, broadcast=True)
+    emit("system_msg", {"text": f"{username} 踏入了修仙界"}, broadcast=True, namespace="/")
 
 @socketio.on("disconnect")
-def handle_disconnect():
+def handle_disconnect(reason=None):
     username = session.get("username")
     if username:
         online_users.pop(username, None)
         afk_players.pop(username, None)
         last_activity.pop(username, None)
-        socketio.emit("system_msg", {"text": f"{username} 离开了修仙界"}, broadcast=True)
+        emit("system_msg", {"text": f"{username} 离开了修仙界"}, broadcast=True, namespace="/")
 
 
 @socketio.on("get_state")
@@ -369,12 +413,18 @@ def handle_get_state():
         sr = SPIRIT_ROOTS[sr_id]
         sr_info = {"id": sr_id, "name": sr["name"], "desc": sr["desc"], "element": sr["element"]}
 
-    # 功法信息
+    # 功法信息（含熟练度）
+    prof = _get_proficiency(char)
     learned_tech = []
     for tid in (json.loads(char["techniques"]) if char["techniques"] else []):
         if tid in TECHNIQUES:
             t = TECHNIQUES[tid]
-            learned_tech.append({"id": tid, "name": t["name"], "tier": t["tier"]})
+            pv = prof.get(tid, 0)
+            learned_tech.append({
+                "id": tid, "name": t["name"], "tier": t["tier"],
+                "proficiency": pv, "max_proficiency": TECHNIQUE_MAX_PROFICIENCY,
+                "prof_pct": round(pv / TECHNIQUE_MAX_PROFICIENCY * 100),
+            })
 
     # 经脉信息
     opened_mer = []
@@ -432,7 +482,7 @@ def handle_move(data):
         emit("game_msg", {"text": "你迈步前行，来到了" + new_loc["name"] + "。", "type": "move"})
     emit("game_msg", {"text": new_loc["desc"], "type": "desc"})
 
-    socketio.emit("player_moved", {"player": session["username"], "to": target, "to_name": new_loc["name"]}, broadcast=True, include_self=False)
+    emit("player_moved", {"player": session["username"], "to": target, "to_name": new_loc["name"]}, broadcast=True, include_self=False, namespace="/")
 
     # 奇遇判定
     char = get_character(session["user_id"])
@@ -947,9 +997,16 @@ def handle_fight():
 
     won = player_hp > 0
     if won:
-        exp_gain = monster["exp"]
         gold_gain = monster["gold"] + random.randint(0, monster["gold"] // 2)
-        log.append(f"斗法胜利！修为提升 {exp_gain}，获得 {gold_gain} 灵石。")
+
+        # 熟练度增长
+        prof_gained = _gain_proficiency(char, session["user_id"], source="fight")
+        prof_parts = []
+        for tid, amt in prof_gained.items():
+            prof_parts.append(f"{TECHNIQUES[tid]['name']}+{amt}")
+
+        prof_msg = f"（{', '.join(prof_parts)}）" if prof_parts else ""
+        log.append(f"斗法胜利！获得 {gold_gain} 灵石。{prof_msg}")
 
         drops = []
         if monster_id in DROP_TABLE:
@@ -979,16 +1036,50 @@ def handle_fight():
             log.append(f"天降机缘，获得【{ITEMS[item_id]['name']}】！")
         set_character_inventory(session["user_id"], inv)
 
-        update_character(session["user_id"], hp=player_hp, exp=char["exp"] + exp_gain, gold=char["gold"] + gold_gain, kills=char["kills"] + 1)
+        update_character(session["user_id"], hp=player_hp, gold=char["gold"] + gold_gain, kills=char["kills"] + 1)
 
         # 任务进度（击杀类）
         char = get_character(session["user_id"])
         _check_quest_progress(char, "kill", monster_id)
     else:
         gold_lost = char["gold"] // 5
-        log.append("你体内灵力耗尽，不敌妖兽……陨落于此。")
-        log.append(f"损失 {gold_lost} 灵石，元神被传送回青云镇疗伤。")
-        update_character(session["user_id"], hp=max_hp // 2, gold=char["gold"] - gold_lost, deaths=char["deaths"] + 1, location="qingyun_town")
+        # 修为惩罚：损失当前升级所需修为的10%，不低于0
+        needed = get_exp_needed(char["level"])
+        if needed != "-" and needed > 0:
+            exp_lost = min(needed // 10, char["exp"])
+        else:
+            exp_lost = 0
+        # 随机掉落背包物品（15%概率，不掉落装备）
+        item_lost_msg = ""
+        inv = get_character_inventory(session["user_id"])
+        droppable = [iid for iid in inv if inv[iid] > 0 and iid not in (char["weapon"], char["armor"], char["accessory"])]
+        if droppable and random.random() < 0.15:
+            lost_id = random.choice(droppable)
+            inv[lost_id] -= 1
+            if inv[lost_id] <= 0:
+                del inv[lost_id]
+            set_character_inventory(session["user_id"], inv)
+            item_lost_msg = f"，遗落了【{ITEMS.get(lost_id, {}).get('name', lost_id)}】"
+
+        death_msgs = [
+            "你体内灵力耗尽，不敌妖兽……陨落于此。",
+            "妖兽一爪拍下，你口吐鲜血，灵力溃散，倒在血泊之中。",
+            "你拼死一搏，终究不敌，意识逐渐模糊……",
+            "眼前一黑，元神被妖兽震散，肉身轰然倒地。",
+        ]
+        log.append(random.choice(death_msgs))
+        penalty_parts = [f"损失 {gold_lost} 灵石"]
+        if exp_lost > 0:
+            penalty_parts.append(f"修为 -{exp_lost}")
+        if item_lost_msg:
+            penalty_parts.append(item_lost_msg.strip("，"))
+        log.append("、".join(penalty_parts) + "，元神被传送回青云镇疗伤。")
+        update_character(session["user_id"],
+            hp=max_hp // 2,
+            gold=max(0, char["gold"] - gold_lost),
+            exp=max(0, char["exp"] - exp_lost),
+            deaths=char["deaths"] + 1,
+            location="qingyun_town")
 
     emit("fight_log", {"log": log, "won": won})
     handle_get_state()
@@ -1005,11 +1096,21 @@ def handle_meditate():
         emit("game_msg", {"text": "此处妖气弥漫，无法静心打坐。", "type": "error"})
         return
     stats = get_full_stats(char)
-    update_character(session["user_id"], hp=stats["max_hp"])
+    # 打坐获得修为（基于修炼倍率）
+    mult = get_cultivation_mult(char)
+    base_exp = 5 + char["level"] * 2
+    exp_gain = max(1, int(base_exp * mult))
+    # 熟练度增长
+    prof_gained = _gain_proficiency(char, session["user_id"], source="meditate")
+    prof_parts = [f"{TECHNIQUES[tid]['name']}+{amt}" for tid, amt in prof_gained.items() if tid in TECHNIQUES]
+    prof_msg = f" 熟练度提升（{', '.join(prof_parts)}）。" if prof_parts else ""
+
+    update_character(session["user_id"], hp=stats["max_hp"], exp=char["exp"] + exp_gain)
+
     msgs = [
-        "你盘膝而坐，运转功法，天地灵气缓缓涌入体内……气血完全恢复。",
-        "你闭目凝神，丹田中的灵力缓缓流转，伤势痊愈，气血充盈。",
-        "你静心打坐，体悟天地大道，灵台清明，气血恢复如初。",
+        f"你盘膝而坐，运转功法，天地灵气涌入丹田……修为提升 {exp_gain}。{prof_msg}",
+        f"你闭目凝神，灵力缓缓流转，伤势痊愈。修为提升 {exp_gain}。{prof_msg}",
+        f"你静心打坐，体悟天地大道，灵台清明。修为提升 {exp_gain}。{prof_msg}",
     ]
     emit("game_msg", {"text": random.choice(msgs), "type": "heal"})
     handle_get_state()
@@ -1038,20 +1139,31 @@ def handle_breakthrough():
         chance = base_chance
         pill_msg = ""
 
-    emit("game_msg", {"text": "你盘膝坐下，运转功法，尝试突破境界……", "type": "info"})
+    # 突破直接消耗修为
+    new_exp = char["exp"] - needed
+    update_character(session["user_id"], exp=max(0, new_exp))
+
+    emit("game_msg", {"text": f"你盘膝坐下，消耗 {needed} 修为，运转功法尝试突破……", "type": "info"})
+    if pill_msg:
+        emit("game_msg", {"text": pill_msg, "type": "buff"})
+
     if random.random() < chance:
         new_lv = cur_lv + 1
         new_stats = calc_level_stats(new_lv)
         update_character(session["user_id"], level=new_lv, max_hp=new_stats["max_hp"], atk=new_stats["atk"], def_stat=new_stats["def_stat"], hp=new_stats["max_hp"])
         new_realm = realm_name(new_lv)
-        if pill_msg: emit("game_msg", {"text": pill_msg, "type": "buff"})
         emit("game_msg", {"text": f"体内灵力暴涌，丹田剧烈震动——突破成功！你已迈入{new_realm}！", "type": "heal"})
-        socketio.emit("system_msg", {"text": f"天道感应：{session['username']} 突破至 {new_realm}，引发天地异象！"}, broadcast=True)
+        emit("system_msg", {"text": f"天道感应：{session['username']} 突破至 {new_realm}，引发天地异象！"}, broadcast=True, namespace="/")
     else:
-        lost_exp = int(needed * 0.3)
         hp_loss = char["hp"] // 3
-        update_character(session["user_id"], exp=max(0, char["exp"] - lost_exp), hp=max(1, char["hp"] - hp_loss))
-        emit("game_msg", {"text": f"灵力逆行，经脉受损……突破失败！损失 {lost_exp} 修为。", "type": "error"})
+        fail_msgs = [
+            f"灵力逆行，经脉受损……突破失败！{needed} 修为化为乌有。",
+            f"丹田中灵力暴走，冲击境界失败，{needed} 修为付诸东流！",
+            f"天地灵气反噬，境界壁垒纹丝不动，{needed} 修为消散于天地间。",
+            f"关键时刻心魔入侵，突破功亏一篑，{needed} 修为烟消云散。",
+        ]
+        emit("game_msg", {"text": random.choice(fail_msgs), "type": "error"})
+        update_character(session["user_id"], hp=max(1, char["hp"] - hp_loss))
     handle_get_state()
 
 
@@ -2142,10 +2254,298 @@ def _check_quest_progress(char, event_type, key, count=1):
         update_character(uid, active_quests=json.dumps(active))
 
 
+# ═══════════════ 拍卖行系统 ═══════════════
+
+import uuid as _uuid
+
+# 拍卖品池：每件拍品有上架概率、稀有度、起拍价范围
+AUCTION_POOL = [
+    # ── 稀有（高概率上架）──
+    {"id": "xuming_dan",     "rarity": "rare", "base_price": (200, 350),   "prob": 0.7, "desc": "恢复200气血"},
+    {"id": "juling_dan",     "rarity": "rare", "base_price": (300, 500),   "prob": 0.7, "desc": "获得150修为"},
+    {"id": "liliang_fulu2",  "rarity": "rare", "base_price": (400, 600),   "prob": 0.6, "desc": "攻击+5(永久)"},
+    {"id": "huti_fulu2",     "rarity": "rare", "base_price": (400, 600),   "prob": 0.6, "desc": "防御+5(永久)"},
+    {"id": "qifu_fulu",      "rarity": "rare", "base_price": (300, 500),   "prob": 0.6, "desc": "气血+30(永久)"},
+    {"id": "egg_rare",       "rarity": "rare", "base_price": (400, 650),   "prob": 0.6, "desc": "孵化稀有灵宠概率更高"},
+    {"id": "pet_feed_good",  "rarity": "rare", "base_price": (120, 200),   "prob": 0.7, "desc": "灵宠经验+50"},
+    {"id": "map_rare",       "rarity": "rare", "base_price": (350, 550),   "prob": 0.6, "desc": "二档宝藏"},
+    {"id": "jiuzhuan_dan",   "rarity": "rare", "base_price": (500, 800),   "prob": 0.5, "desc": "气血完全恢复"},
+    # ── 珍品（中概率上架）──
+    {"id": "wudao_dan",      "rarity": "epic", "base_price": (700, 1100),  "prob": 0.4, "desc": "获得400修为"},
+    {"id": "pojing_dan",     "rarity": "epic", "base_price": (800, 1200),  "prob": 0.35,"desc": "突破必定成功"},
+    {"id": "egg_legend",     "rarity": "epic", "base_price": (1200, 1800), "prob": 0.35,"desc": "必定孵化稀有以上"},
+    {"id": "pet_feed_best",  "rarity": "epic", "base_price": (500, 800),   "prob": 0.4, "desc": "灵宠经验+200"},
+    {"id": "map_legend",     "rarity": "epic", "base_price": (1000, 1500), "prob": 0.3, "desc": "三档宝藏"},
+    # ── 传说（低概率上架）──
+    {"id": "wudao_dan",      "rarity": "legend", "base_price": (1500, 2500), "prob": 0.15, "desc": "获得400修为（极品）"},
+    {"id": "pojing_dan",     "rarity": "legend", "base_price": (2000, 3500), "prob": 0.12, "desc": "突破必定成功（绝品）"},
+    {"id": "egg_legend",     "rarity": "legend", "base_price": (2500, 4000), "prob": 0.10, "desc": "传说灵兽蛋（万年难遇）"},
+    {"id": "jiuzhuan_dan",   "rarity": "legend", "base_price": (1800, 3000), "prob": 0.12, "desc": "九转还魂丹（起死回生）"},
+]
+
+# 拍卖NPC竞拍者
+AUCTION_NPC = {
+    "name": "金算盘",
+    "title": "天机拍卖行大掌柜",
+    "budget": 15000,
+    "interest": {
+        "rare":  {"chance": 0.5, "max_bids": 2, "max_pct": 1.3},
+        "epic":  {"chance": 0.7, "max_bids": 3, "max_pct": 1.5},
+        "legend":{"chance": 0.85,"max_bids": 4, "max_pct": 2.0},
+    },
+    "bid_delay": (3, 12),  # NPC出价延迟（秒）
+}
+
+active_auctions = {}       # auction_id -> {...}
+auction_npc_state = {"total_spent": 0, "budget": AUCTION_NPC["budget"]}
+auction_last_refresh = 0   # 上次刷新时间戳(ms)
+AUCTION_REFRESH_INTERVAL = 4 * 3600 * 1000  # 4小时(ms)
+
+def _item_name(item_id):
+    """获取物品名称（优先从ITEMS，再从坊市静态列表）"""
+    if item_id in ITEMS:
+        return ITEMS[item_id]["name"]
+    # 坊市特殊物品
+    _shop_names = {
+        "liliang_fulu2": "高级力量符箓", "huti_fulu2": "高级护体符箓",
+        "qifu_fulu": "祈福符箓", "pet_feed_good": "高级灵兽粮",
+        "pet_feed_best": "万灵精华",
+    }
+    return _shop_names.get(item_id, item_id)
+
+def _refresh_auctions():
+    """刷新拍卖行：随机上架新拍品"""
+    global active_auctions, auction_last_refresh
+    now = time.time() * 1000  # ms
+    auction_last_refresh = now
+    # 移除已结束超过5分钟的拍品
+    to_del = [k for k, v in active_auctions.items() if v.get("won") and now - v.get("ends_at", 0) > 300000]
+    for k in to_del:
+        del active_auctions[k]
+
+    # 随机选取新拍品上架
+    import random as _r
+    for pool_item in AUCTION_POOL:
+        if _r.random() > pool_item["prob"]:
+            continue
+        # 检查是否已有同类拍品
+        if any(a["item_id"] == pool_item["id"] and a["rarity"] == pool_item["rarity"] and not a.get("won") for a in active_auctions.values()):
+            continue
+        low, high = pool_item["base_price"]
+        start_price = _r.randint(low, high)
+        min_incr = max(10, start_price // 10)
+        aid = _uuid.uuid4().hex[:8]
+        duration = _r.randint(90, 180) * 1000  # 90~180秒
+        active_auctions[aid] = {
+            "auction_id": aid,
+            "item_id": pool_item["id"],
+            "name": _item_name(pool_item["id"]),
+            "desc": pool_item["desc"],
+            "rarity": pool_item["rarity"],
+            "start_price": start_price,
+            "current_price": start_price,
+            "min_increment": min_incr,
+            "highest_bidder": None,   # "player" / "npc" / None
+            "bids_player": 0,
+            "bids_npc": 0,
+            "ends_at": now + duration,
+            "won": False,
+            "sold_to_npc": False,
+            "created_at": now,
+        }
+        # NPC延迟出价
+        npc_interest = AUCTION_NPC["interest"].get(pool_item["rarity"], {})
+        if _r.random() < npc_interest.get("chance", 0.3):
+            npc_delay = _r.randint(AUCTION_NPC["bid_delay"][0], AUCTION_NPC["bid_delay"][1])
+            active_auctions[aid]["npc_bid_at"] = now + npc_delay * 1000
+            active_auctions[aid]["npc_max_bids"] = npc_interest.get("max_bids", 2)
+            active_auctions[aid]["npc_max_pct"] = npc_interest.get("max_pct", 1.3)
+
+def _npc_may_bid(auction):
+    """NPC决定是否出价"""
+    npc = auction_npc_state
+    if npc["total_spent"] >= npc["budget"]:
+        return False
+    if auction.get("won") or auction.get("sold_to_npc"):
+        return False
+    bids = auction.get("bids_npc", 0)
+    if bids >= auction.get("npc_max_bids", 2):
+        return False
+    max_price = int(auction["start_price"] * auction.get("npc_max_pct", 1.3))
+    if auction["current_price"] >= max_price:
+        return False
+    if npc["budget"] - npc["total_spent"] < auction["current_price"] + auction["min_increment"]:
+        return False
+    return True
+
+def _npc_do_bid(auction):
+    """NPC执行出价"""
+    increment = auction["min_increment"] * (1 + random.randint(0, 2))
+    new_price = auction["current_price"] + increment
+    max_price = int(auction["start_price"] * auction.get("npc_max_pct", 1.3))
+    new_price = min(new_price, max_price)
+    if new_price <= auction["current_price"]:
+        return False
+    auction["current_price"] = new_price
+    auction["highest_bidder"] = "npc"
+    auction["bids_npc"] = auction.get("bids_npc", 0) + 1
+    return True
+
+def _process_auction_ticks():
+    """后台循环：处理NPC出价、拍卖结束、4小时自动刷新"""
+    global auction_last_refresh
+    while True:
+        socketio.sleep(3)
+        now = time.time() * 1000
+
+        # 4小时自动刷新拍品
+        if now - auction_last_refresh >= AUCTION_REFRESH_INTERVAL:
+            _refresh_auctions()
+            socketio.emit("auction_log", {"text": "天机拍卖行新一批宝物上架了！", "type": "shop"}, namespace="/")
+            socketio.emit("auction_update", {}, namespace="/")
+
+        changed = False
+        for aid, a in list(active_auctions.items()):
+            if a.get("won") or a.get("sold_to_npc"):
+                continue
+            # 检查拍卖是否结束
+            if now >= a["ends_at"]:
+                if a["highest_bidder"] == "player":
+                    a["won"] = True
+                    # 通知在线玩家（如果有）
+                    socketio.emit("auction_update", {"auction_id": aid}, namespace="/")
+                elif a["highest_bidder"] == "npc":
+                    a["sold_to_npc"] = True
+                    auction_npc_state["total_spent"] += a["current_price"]
+                    socketio.emit("auction_log", {"text": f"【{a['name']}】被金算盘以{a['current_price']}灵石拍走！", "type": "info"}, namespace="/")
+                    socketio.emit("auction_update", {"auction_id": aid}, namespace="/")
+                else:
+                    # 无人出价，流拍
+                    a["won"] = True
+                changed = True
+                continue
+            # NPC延迟出价
+            npc_bid_at = a.get("npc_bid_at")
+            if npc_bid_at and now >= npc_bid_at and _npc_may_bid(a):
+                if _npc_do_bid(a):
+                    a["npc_bid_at"] = now + random.randint(5, 15) * 1000  # 下次出价延迟
+                    socketio.emit("auction_log", {"text": f"金算盘对【{a['name']}】出价 {a['current_price']} 灵石！", "type": "info"}, namespace="/")
+                    socketio.emit("auction_update", {"auction_id": aid}, namespace="/")
+                    changed = True
+            # 拍卖即将结束时NPC最后一搏
+            time_left = a["ends_at"] - now
+            if 0 < time_left < 15000 and a["highest_bidder"] == "player" and _npc_may_bid(a):
+                if random.random() < 0.6:
+                    if _npc_do_bid(a):
+                        socketio.emit("auction_log", {"text": f"金算盘在最后关头抢价【{a['name']}】→ {a['current_price']}灵石！", "type": "info"}, namespace="/")
+                        socketio.emit("auction_update", {"auction_id": aid}, namespace="/")
+                        changed = True
+
+def _check_auction_win(username, user_id):
+    """检查玩家赢得的拍卖品并发放"""
+    to_del = []
+    for aid, a in active_auctions.items():
+        if a.get("won") and a["highest_bidder"] == "player" and not a.get("claimed"):
+            a["claimed"] = True
+            inv = get_character_inventory(user_id)
+            inv[a["item_id"]] = inv.get(a["item_id"], 0) + 1
+            set_character_inventory(user_id, inv)
+            to_del.append(aid)
+    for aid in to_del:
+        if aid in active_auctions:
+            del active_auctions[aid]
+
+# ═══════════════ 拍卖行Socket事件 ═══════════════
+
+@socketio.on("get_auction")
+def handle_get_auction():
+    if "user_id" not in session: return
+    # 首次打开或拍品为空时初始化
+    if not active_auctions:
+        _refresh_auctions()
+    _check_auction_win(session.get("username", ""), session["user_id"])
+    now = time.time() * 1000
+    items = []
+    for aid, a in sorted(active_auctions.items(), key=lambda x: x[1].get("created_at", 0)):
+        items.append({
+            "auction_id": a["auction_id"],
+            "item_id": a["item_id"],
+            "name": a["name"],
+            "desc": a["desc"],
+            "rarity": a["rarity"],
+            "current_price": a["current_price"],
+            "min_increment": a["min_increment"],
+            "highest_bidder": a["highest_bidder"],
+            "ends_at": a["ends_at"],
+            "won": a.get("won", False),
+            "sold_to_npc": a.get("sold_to_npc", False),
+        })
+    next_refresh = auction_last_refresh + AUCTION_REFRESH_INTERVAL
+    emit("auction_list", {"items": items, "next_refresh": next_refresh})
+
+@socketio.on("auction_bid")
+def handle_auction_bid(data):
+    if "user_id" not in session: return
+    touch_activity(session.get("username", ""))
+    char = get_character(session["user_id"])
+    if not char: return
+
+    aid = data.get("auction_id")
+    amount = data.get("amount", 0)
+    if not aid or aid not in active_auctions:
+        emit("game_msg", {"text": "该拍品已不存在。", "type": "error"})
+        return
+
+    a = active_auctions[aid]
+    if a.get("won") or a.get("sold_to_npc"):
+        emit("game_msg", {"text": "该拍品已成交。", "type": "error"})
+        return
+
+    now = time.time() * 1000
+    if now >= a["ends_at"]:
+        emit("game_msg", {"text": "拍卖已结束。", "type": "error"})
+        return
+
+    min_bid = a["current_price"] + a["min_increment"]
+    if amount < min_bid:
+        emit("game_msg", {"text": f"出价不得低于 {min_bid} 灵石。", "type": "error"})
+        return
+
+    if amount > char["gold"]:
+        emit("game_msg", {"text": f"灵石不足！你只有 {char['gold']} 灵石。", "type": "error"})
+        return
+
+    # 扣除灵石，退还之前的出价（如果有）
+    prev_bid = a.get("player_bid_amount", 0)
+    new_gold = char["gold"] - amount + prev_bid
+    update_character(session["user_id"], gold=new_gold)
+
+    a["current_price"] = amount
+    a["highest_bidder"] = "player"
+    a["bids_player"] = a.get("bids_player", 0) + 1
+    a["player_bid_amount"] = amount  # 记录玩家当前出价，后续退还用
+
+    # 延长拍卖时间（防止最后秒杀）
+    time_left = a["ends_at"] - now
+    if time_left < 20000:
+        a["ends_at"] = now + 20000  # 至少剩余20秒
+
+    # NPC可能加价
+    npc_interest = AUCTION_NPC["interest"].get(a["rarity"], {})
+    if random.random() < npc_interest.get("chance", 0.3) and _npc_may_bid(a):
+        npc_delay = random.randint(AUCTION_NPC["bid_delay"][0], AUCTION_NPC["bid_delay"][1])
+        a["npc_bid_at"] = now + npc_delay * 1000
+
+    emit("game_msg", {"text": f"你对【{a['name']}】出价 {amount} 灵石！", "type": "shop"})
+    socketio.emit("auction_update", {"auction_id": aid}, namespace="/")
+    handle_get_state()
+
+
 # ═══════════════ 启动 ═══════════════
 
 init_db()
 
 if __name__ == "__main__":
     socketio.start_background_task(check_afk_loop)
+    socketio.start_background_task(_process_auction_ticks)
     socketio.run(app, host="0.0.0.0", port=5000, debug=False)
