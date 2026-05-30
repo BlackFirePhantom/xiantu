@@ -2544,8 +2544,10 @@ def handle_auction_bid(data):
 # ═══════════════ 启动 ═══════════════
 
 init_db()
+print("仙途服务器启动中...", flush=True)
 
 if __name__ == "__main__":
     socketio.start_background_task(check_afk_loop)
     socketio.start_background_task(_process_auction_ticks)
+    print("仙途服务器已就绪，端口 5000", flush=True)
     socketio.run(app, host="0.0.0.0", port=5000, debug=False)
