@@ -196,7 +196,15 @@
         </div>
     </div>
 
+    <!-- 物品详情面板 -->
+    <div id="item-detail-modal" class="modal" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
+        <div class="modal-content" style="width:400px;">
+            <span class="modal-close" onclick="this.closest('.modal').style.display='none'">&times;</span>
+            <div id="item-detail-body"></div>
+        </div>
+    </div>
+
     <script src="{{ url_for('static', filename='js/socket.io.min.js') }}?v=2"></script>
-    <script src="{{ url_for('static', filename='js/game.js') }}?v=12"></script>
+    <script src="{{ url_for('static', filename='js/game.js') }}?v=13"></script>
 </body>
 </html>

@@ -1520,6 +1520,112 @@ def handle_unequip(data):
     handle_get_state()
 
 
+@socketio.on("item_detail")
+def handle_item_detail(data):
+    """返回物品详细信息及获取途径"""
+    if "user_id" not in session: return
+    item_id = data.get("item")
+    if not item_id: return
+    item = lookup_item(item_id)
+    if not item: return
+
+    sources = []
+
+    # 1. 坊市购买
+    _shop_items = [
+        "huiqi_dan", "huichun_dan", "peiyuan_dan", "dingdan",
+        "liliang_fulu", "huti_fulu", "tiemu_sword", "cloth_robe",
+        "qingyu_peidai", "tongqian_hufu", "egg_common", "pet_feed",
+    ]
+    if item_id in _shop_items:
+        sources.append("坊市购买")
+
+    # 2. 怪物掉落
+    monster_names = []
+    for mid, drops in DROP_TABLE.items():
+        for did, _ in drops:
+            if did == item_id:
+                monster_names.append(MONSTERS.get(mid, {}).get("name", mid))
+    for mid, drops in MAP_MONSTER_DROPS.items():
+        for did, _ in drops:
+            if did == item_id and MONSTERS.get(mid, {}).get("name", mid) not in monster_names:
+                monster_names.append(MONSTERS.get(mid, {}).get("name", mid))
+    for mid, drops in PET_EGG_MONSTER_DROPS.items():
+        for did, _ in drops:
+            if did == item_id and MONSTERS.get(mid, {}).get("name", mid) not in monster_names:
+                monster_names.append(MONSTERS.get(mid, {}).get("name", mid))
+    if monster_names:
+        sources.append(f"斩妖掉落（{', '.join(monster_names[:5])}{'等' if len(monster_names) > 5 else ''}）")
+
+    # 3. 地点独有
+    loc_names = []
+    for loc_id, drops in LOCATION_UNIQUE_DROPS.items():
+        for did, _ in drops:
+            if did == item_id:
+                loc_names.append(LOCATIONS.get(loc_id, {}).get("name", loc_id))
+    if loc_names:
+        sources.append(f"独有产出（{', '.join(loc_names)}）")
+
+    # 4. 炼丹/炼器
+    for rid, r in RECIPES.items():
+        if r.get("result") == item_id:
+            sources.append(f"炼丹获得（{r['name']}）")
+            break
+    for rid, r in FORGE_RECIPES.items():
+        if r.get("result_slot"):
+            sources.append("炼器锻造")
+            break
+
+    # 5. 拍卖行
+    if item_id in [p["id"] for p in AUCTION_POOL]:
+        sources.append("拍卖行竞拍")
+
+    # 6. 宝藏
+    if item.get("type") == "treasure_map":
+        sources.append("使用后探索宝藏")
+    if item.get("type") == "map_upgrade":
+        sources.append("高级怪物掉落")
+
+    # 7. 功法残卷
+    if item.get("type") == "technique_fragment":
+        sources.append("宝藏探索获得")
+
+    if not sources:
+        sources.append("探索世界获取")
+
+    # 效果描述
+    effect = ""
+    if item.get("type") == "consumable":
+        eff = item.get("effect", "")
+        if eff == "heal": effect = f"使用后恢复{item.get('value', 0)}气血"
+        elif eff == "heal_full": effect = "使用后气血完全恢复"
+        elif eff == "exp": effect = f"使用后获得{item.get('value', 0)}修为"
+        elif eff == "breakthrough": effect = "下次突破必定成功"
+        elif eff == "combat_buff": effect = f"下次战斗伤害+{item.get('value', 0)}%"
+        elif eff == "atk_up": effect = f"永久增加{item.get('value', 0)}攻击"
+        elif eff == "def_up": effect = f"永久增加{item.get('value', 0)}防御"
+        elif eff == "hp_up": effect = f"永久增加{item.get('value', 0)}气血上限"
+    elif item.get("type") == "equip":
+        parts = []
+        if item.get("atk"): parts.append(f"攻击+{item['atk']}")
+        if item.get("def"): parts.append(f"防御+{item['def']}")
+        if item.get("bonus_hp"): parts.append(f"气血+{item['bonus_hp']}")
+        effect = "、".join(parts) if parts else ""
+    elif item.get("type") == "pet_food":
+        effect = f"灵宠经验+{item.get('pet_exp', 0)}"
+    elif item.get("type") == "pet_egg":
+        tiers = {"common": "普通", "rare": "稀有", "legend": "传说"}
+        effect = f"{tiers.get(item.get('egg_tier', ''), '')}灵兽蛋，点击孵化"
+
+    emit("item_detail", {
+        "id": item_id,
+        "name": item["name"],
+        "desc": item.get("desc", ""),
+        "effect": effect,
+        "sources": sources,
+    })
+
+
 @socketio.on("buy_item")
 def handle_buy_item(data):
     if "user_id" not in session: return

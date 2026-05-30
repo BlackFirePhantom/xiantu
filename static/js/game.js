@@ -72,6 +72,24 @@ socket.on("afk_tick", (data) => {
 });
 socket.on("npc_detail", (data) => renderNPCDetail(data));
 
+// 物品详情
+socket.on("item_detail", (data) => {
+    const body = document.getElementById("item-detail-body");
+    let html = `<h3 style="color:#8fd4a0;margin-bottom:12px;">${data.name}</h3>`;
+    html += `<div style="color:#c8c0b0;font-size:13px;margin-bottom:8px;">${data.desc}</div>`;
+    if (data.effect) {
+        html += `<div style="color:#7eb8da;font-size:12px;margin-bottom:8px;">${data.effect}</div>`;
+    }
+    html += '<div style="border-top:1px solid #2a3a32;padding-top:8px;margin-top:8px;">';
+    html += '<div style="color:#d4b870;font-size:12px;margin-bottom:4px;">获取途径：</div>';
+    data.sources.forEach(s => {
+        html += `<div style="color:#6a8a7a;font-size:12px;padding:2px 0;">· ${s}</div>`;
+    });
+    html += '</div>';
+    body.innerHTML = html;
+    document.getElementById("item-detail-modal").style.display = "flex";
+});
+
 // 奇遇事件
 socket.on("fortune_event", (data) => {
     currentForture = data;
@@ -261,8 +279,17 @@ function renderInventory(items) {
             }
             entry.innerHTML = `<span><span class="item-name">${item.name}</span><span class="item-count">x${item.count}</span></span>${actionHtml}`;
             entry.title = item.desc;
+            // 点击物品名显示详情
+            entry.querySelector(".item-name").style.cursor = "pointer";
+            entry.querySelector(".item-name").onclick = (e) => {
+                e.stopPropagation();
+                socket.emit("item_detail", { item: item.id });
+            };
             if (!actionHtml) {
-                entry.onclick = () => socket.emit("use_item", { item: item.id });
+                // 消耗品点击整行使用
+                if (["consumable", "pet_egg"].includes(item.type)) {
+                    entry.onclick = () => socket.emit("use_item", { item: item.id });
+                }
             }
             div.appendChild(entry);
         });
@@ -279,7 +306,11 @@ function renderInventory(items) {
             entry.className = "item-entry";
             entry.innerHTML = `<span><span class="item-name">${item.name}</span><span class="item-count">x${item.count}</span></span>`;
             entry.title = item.desc;
-            entry.onclick = () => socket.emit("use_item", { item: item.id });
+            entry.querySelector(".item-name").style.cursor = "pointer";
+            entry.querySelector(".item-name").onclick = (e) => {
+                e.stopPropagation();
+                socket.emit("item_detail", { item: item.id });
+            };
             div.appendChild(entry);
         });
     }
@@ -692,7 +723,7 @@ function showPanel(name) {
     else if (name === "pets") renderPetPanel();
 }
 function closePanel(name) {
-    const map = { tech: "tech-modal", mer: "mer-modal", alchemy: "alchemy-modal", forge: "forge-modal", pet: "pet-modal", npc: "npc-modal", auction: "auction-modal" };
+    const map = { tech: "tech-modal", mer: "mer-modal", alchemy: "alchemy-modal", forge: "forge-modal", pet: "pet-modal", npc: "npc-modal", auction: "auction-modal", "item-detail": "item-detail-modal" };
     document.getElementById(map[name]).style.display = "none";
 }
 
