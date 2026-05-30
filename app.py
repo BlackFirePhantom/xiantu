@@ -1082,7 +1082,7 @@ def handle_fight():
             location="qingyun_town")
 
     emit("fight_log", {"log": log, "won": won})
-    handle_get_state()
+    # 状态刷新由客户端动画播放完毕后请求
 
 
 @socketio.on("meditate")
@@ -1836,7 +1836,6 @@ def handle_use_map(data):
                              gold=max(0, char["gold"] - 20), deaths=char["deaths"] + 1)
             set_character_inventory(session["user_id"], inv)
             emit("fight_log", {"log": log_lines, "won": False})
-            handle_get_state()
             return
         # 更新战斗后的HP
         update_character(session["user_id"], hp=player_hp)
@@ -1873,7 +1872,6 @@ def handle_use_map(data):
     update_character(session["user_id"], exp=char["exp"] + exp_gain, gold=char["gold"] + gold_gain)
 
     emit("fight_log", {"log": log_lines, "won": True})
-    handle_get_state()
 
 
 @socketio.on("upgrade_map")
