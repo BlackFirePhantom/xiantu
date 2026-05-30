@@ -2550,4 +2550,4 @@ if __name__ == "__main__":
     socketio.start_background_task(check_afk_loop)
     socketio.start_background_task(_process_auction_ticks)
     print("仙途服务器已就绪，端口 5000", flush=True)
-    socketio.run(app, host="0.0.0.0", port=5000, debug=False)
+    socketio.run(app, host="0.0.0.0", port=5000, debug=False, allow_unsafe_werkzeug=True)
