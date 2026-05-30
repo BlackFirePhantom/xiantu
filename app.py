@@ -1103,21 +1103,17 @@ def handle_meditate():
         emit("game_msg", {"text": "此处妖气弥漫，无法静心打坐。", "type": "error"})
         return
     stats = get_full_stats(char)
-    # 打坐获得修为（基于修炼倍率）
-    mult = get_cultivation_mult(char)
-    base_exp = 5 + char["level"] * 2
-    exp_gain = max(1, int(base_exp * mult))
     # 熟练度增长
     prof_gained = _gain_proficiency(char, session["user_id"], source="meditate")
     prof_parts = [f"{TECHNIQUES[tid]['name']}+{amt}" for tid, amt in prof_gained.items() if tid in TECHNIQUES]
     prof_msg = f" 熟练度提升（{', '.join(prof_parts)}）。" if prof_parts else ""
 
-    update_character(session["user_id"], hp=stats["max_hp"], exp=char["exp"] + exp_gain)
+    update_character(session["user_id"], hp=stats["max_hp"])
 
     msgs = [
-        f"你盘膝而坐，运转功法，天地灵气涌入丹田……修为提升 {exp_gain}。{prof_msg}",
-        f"你闭目凝神，灵力缓缓流转，伤势痊愈。修为提升 {exp_gain}。{prof_msg}",
-        f"你静心打坐，体悟天地大道，灵台清明。修为提升 {exp_gain}。{prof_msg}",
+        f"你盘膝而坐，运转功法，天地灵气涌入体内……气血完全恢复。{prof_msg}",
+        f"你闭目凝神，灵力缓缓流转，伤势痊愈，气血充盈。{prof_msg}",
+        f"你静心打坐，体悟天地大道，灵台清明，气血恢复如初。{prof_msg}",
     ]
     emit("game_msg", {"text": random.choice(msgs), "type": "heal"})
     handle_get_state()
