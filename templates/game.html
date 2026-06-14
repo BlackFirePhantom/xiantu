@@ -3,6 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#8fd4a0">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
     <title>仙途 — {{ username }}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=5">
 </head>
@@ -65,16 +69,16 @@
             </div>
 
             <div class="action-bar">
-                <button class="btn btn-fight" id="btn-fight" onclick="doFight()">斩妖</button>
-                <button class="btn btn-rest" id="btn-rest" onclick="doMeditate()">打坐修炼</button>
-                <button class="btn btn-breakthrough" id="btn-breakthrough" onclick="doBreakthrough()">境界突破</button>
-                <button class="btn btn-tech" onclick="showPanel('techniques')">功法</button>
-                <button class="btn btn-meridian" onclick="showPanel('meridians')">经脉</button>
+                <button class="btn btn-fight" id="btn-fight" onclick="doFight()">斩妖 <span class="shortcut-hint">F</span></button>
+                <button class="btn btn-rest" id="btn-rest" onclick="doMeditate()">打坐修炼 <span class="shortcut-hint">M</span></button>
+                <button class="btn btn-breakthrough" id="btn-breakthrough" onclick="doBreakthrough()">境界突破 <span class="shortcut-hint">B</span></button>
+                <button class="btn btn-tech" onclick="showPanel('techniques')">功法 <span class="shortcut-hint">T</span></button>
+                <button class="btn btn-meridian" onclick="showPanel('meridians')">经脉 <span class="shortcut-hint">J</span></button>
                 <button class="btn btn-alchemy" onclick="showPanel('alchemy')">炼丹</button>
                 <button class="btn btn-forge" onclick="showPanel('forge')">炼器</button>
                 <button class="btn btn-pet" onclick="showPanel('pets')">灵宠</button>
                 <button class="btn btn-auction" onclick="showAuction()">拍卖行</button>
-                <button class="btn btn-leaderboard" onclick="showLeaderboard()">天骄榜</button>
+                <button class="btn btn-leaderboard" onclick="showLeaderboard()">天骄榜 <span class="shortcut-hint">L</span></button>
             </div>
 
             <!-- 奇遇弹窗 -->
@@ -205,6 +209,13 @@
     </div>
 
     <script src="{{ url_for('static', filename='js/socket.io.min.js') }}?v=2"></script>
-    <script src="{{ url_for('static', filename='js/game.js') }}?v=13"></script>
+    <script src="{{ url_for('static', filename='js/socket.js') }}?v=1"></script>
+    <script src="{{ url_for('static', filename='js/ui.js') }}?v=1"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}?v=1"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('{{ url_for("static", filename="sw.js") }}').catch(() => {});
+        }
+    </script>
 </body>
 </html>
