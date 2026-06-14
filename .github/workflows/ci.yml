@@ -21,7 +21,28 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Syntax check
-        run: python -m py_compile app.py && python -m py_compile models.py && python -m py_compile game_data.py && python -m py_compile events.py
+        run: |
+          python -m py_compile app.py
+          python -m py_compile models.py
+          python -m py_compile game_data.py
+          python -m py_compile events.py
+          python -m py_compile npc_data.py
+          python -m py_compile config.py
+
+      - name: Module syntax check
+        run: |
+          python -m py_compile game/utils.py
+          python -m py_compile game/combat.py
+          python -m py_compile game/cultivation.py
+          python -m py_compile game/crafting.py
+          python -m py_compile game/pet.py
+          python -m py_compile game/treasure.py
+          python -m py_compile game/npc.py
+          python -m py_compile game/events.py
+          python -m py_compile game/auction.py
+
+      - name: Unit tests
+        run: python -m pytest tests/ -v
 
       - name: Import test
         run: python -c "from app import app; print('Import OK')"

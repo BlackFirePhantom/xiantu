@@ -3,7 +3,10 @@
 import sqlite3
 import json
 import os
+import logging
 from contextlib import contextmanager
+
+logger = logging.getLogger("xiantu.db")
 
 DB_DIR = os.path.join(os.path.dirname(__file__), "data")
 os.makedirs(DB_DIR, exist_ok=True)
@@ -29,6 +32,27 @@ def get_db():
 def _column_exists(conn, table, column):
     cols = conn.execute(f"PRAGMA table_info({table})").fetchall()
     return any(c["name"] == column for c in cols)
+
+
+# 数据库迁移：每条迁移按版本号顺序执行，失败则跳过（已执行过的）
+_MIGRATIONS = [
+    # (版本号, 列名, 表, 列定义)
+    (1, "spirit_root",       "characters", "TEXT DEFAULT NULL"),
+    (2, "techniques",        "characters", "TEXT DEFAULT '[]'"),
+    (3, "open_meridians",    "characters", "TEXT DEFAULT '[]'"),
+    (4, "last_active",       "characters", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
+    (5, "accessory",         "characters", "TEXT DEFAULT NULL"),
+    (6, "combat_buff",       "characters", "INTEGER DEFAULT 0"),
+    (7, "pets",              "characters", "TEXT DEFAULT '[]'"),
+    (8, "active_pet",        "characters", "TEXT DEFAULT NULL"),
+    (9, "npc_goodwill",      "characters", "TEXT DEFAULT '{}'"),
+    (10, "active_quests",    "characters", "TEXT DEFAULT '[]'"),
+    (11, "completed_quests", "characters", "TEXT DEFAULT '[]'"),
+    (12, "sect_contrib",     "characters", "INTEGER DEFAULT 0"),
+    (13, "daily_quest_date", "characters", "TEXT DEFAULT NULL"),
+    (14, "npc_gift_date",    "characters", "TEXT DEFAULT '{}'"),
+    (15, "proficiency",      "characters", "TEXT DEFAULT '{}'"),
+]
 
 
 def init_db():
@@ -73,27 +97,22 @@ def init_db():
                 last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (user_id) REFERENCES users(id)
             );
+
+            CREATE TABLE IF NOT EXISTS schema_version (
+                version INTEGER PRIMARY KEY
+            );
         """)
-        # 兼容旧数据库：自动添加新列
-        for col, col_def in [
-            ("spirit_root", "TEXT DEFAULT NULL"),
-            ("techniques", "TEXT DEFAULT '[]'"),
-            ("open_meridians", "TEXT DEFAULT '[]'"),
-            ("last_active", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
-            ("accessory", "TEXT DEFAULT NULL"),
-            ("combat_buff", "INTEGER DEFAULT 0"),
-            ("pets", "TEXT DEFAULT '[]'"),
-            ("active_pet", "TEXT DEFAULT NULL"),
-            ("npc_goodwill", "TEXT DEFAULT '{}'"),
-            ("active_quests", "TEXT DEFAULT '[]'"),
-            ("completed_quests", "TEXT DEFAULT '[]'"),
-            ("sect_contrib", "INTEGER DEFAULT 0"),
-            ("daily_quest_date", "TEXT DEFAULT NULL"),
-            ("npc_gift_date", "TEXT DEFAULT '{}'"),
-            ("proficiency", "TEXT DEFAULT '{}'"),
-        ]:
-            if not _column_exists(conn, "characters", col):
-                conn.execute(f"ALTER TABLE characters ADD COLUMN {col} {col_def}")
+
+        # 获取当前版本
+        applied = {row[0] for row in conn.execute("SELECT version FROM schema_version").fetchall()}
+
+        for ver, col, table, col_def in _MIGRATIONS:
+            if ver in applied:
+                continue
+            if not _column_exists(conn, table, col):
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {col_def}")
+                logger.info("数据库迁移 v%d：%s 表新增列 %s", ver, table, col)
+            conn.execute("INSERT OR IGNORE INTO schema_version (version) VALUES (?)", (ver,))
 
 
 def create_user(username, password_hash):

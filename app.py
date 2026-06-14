@@ -5,9 +5,13 @@ import hashlib
 import secrets
 import time
 import json
+import logging
 from datetime import datetime
 from flask import Flask, render_template, request, redirect, url_for, session
 from flask_socketio import SocketIO, emit
+from werkzeug.security import generate_password_hash, check_password_hash
+
+from config import SECRET_KEY, CORS_ALLOWED_ORIGINS, HOST, PORT, AFK_TIMEOUT, AFK_MAX_HOURS, AFK_INTERVAL
 
 from models import (
     init_db, create_user, get_user, create_character,
@@ -32,18 +36,34 @@ from npc_data import (
     get_goodwill_tier, get_sect_rank,
 )
 
+# game 模块
+from game.utils import (
+    calc_level_stats, get_full_stats, get_exp_needed, get_cultivation_mult,
+    format_duration, gain_proficiency, get_proficiency, proficiency_mult,
+)
+from game.cultivation import process_offline_cultivation
+from game.pet import get_pet_display_info, hatch_pet_egg, feed_pet
+from game.npc import (
+    get_npc_info_for_location, get_quest_info, get_sect_info,
+    interact_with_npc, give_npc_gift, accept_quest, complete_quest,
+    check_quest_progress,
+)
+from game.treasure import use_treasure_map, upgrade_treasure_map, combine_fragments
+from game.events import check_fortune, process_surprise, process_fortune_outcome
+from game.auction import (
+    AUCTION_POOL, AUCTION_NPC, _item_name as auction_item_name,
+    npc_may_bid, npc_do_bid,
+)
+
 app = Flask(__name__)
-app.secret_key = secrets.token_hex(32)
-socketio = SocketIO(app, async_mode="threading", cors_allowed_origins="*")
+app.secret_key = SECRET_KEY
+socketio = SocketIO(app, async_mode="threading", cors_allowed_origins=CORS_ALLOWED_ORIGINS)
 
 online_users = {}
 last_activity = {}     # username -> timestamp of last action
 afk_players = {}       # username -> timestamp when AFK started
-AFK_TIMEOUT = 600      # 10 minutes (seconds) of inactivity -> AFK
-AFK_MAX_HOURS = 24     # max AFK accumulation
-AFK_INTERVAL = 60      # AFK rewards every 60 seconds
 
-# ═══════════════ 辅助函数 ═══════════════
+# ═══════════════ 辅助函数（使用 game.utils） ═══════════════
 
 def touch_activity(username):
     """记录用户活动时间"""
@@ -117,168 +137,20 @@ def check_afk_loop():
                 }, room=sid)
 
 def hash_password(password):
-    return hashlib.sha256(password.encode()).hexdigest()
+    """使用 werkzeug 生成安全密码哈希（带盐）"""
+    return generate_password_hash(password)
 
-def calc_level_stats(level):
-    return {
-        "max_hp": 100 + (level - 1) * 15,
-        "atk": 10 + (level - 1) * 3,
-        "def_stat": 5 + (level - 1) * 2,
-    }
+def verify_password(password, stored_hash):
+    """验证密码，兼容旧的 SHA-256 哈希"""
+    if stored_hash.startswith("pbkdf2:") or stored_hash.startswith("scrypt:"):
+        return check_password_hash(stored_hash, password)
+    # 向后兼容：旧的 SHA-256 哈希
+    if stored_hash == hashlib.sha256(password.encode()).hexdigest():
+        return True
+    return False
 
-def get_full_stats(char):
-    base = calc_level_stats(char["level"])
-    atk = base["atk"]
-    defn = base["def_stat"]
-    max_hp = base["max_hp"]
-
-    # 装备加成
-    w = lookup_item(char["weapon"]) if char["weapon"] else None
-    if w: atk += w.get("atk", 0)
-    a = lookup_item(char["armor"]) if char["armor"] else None
-    if a: defn += a.get("def", 0)
-    ac = lookup_item(char["accessory"]) if char["accessory"] else None
-    if ac:
-        atk += ac.get("atk", 0)
-        defn += ac.get("def", 0)
-        max_hp += ac.get("bonus_hp", 0)
-
-    # 功法加成（受熟练度影响）
-    prof = _get_proficiency(char)
-    learned = json.loads(char["techniques"]) if char["techniques"] else []
-    for tid in learned:
-        if tid in TECHNIQUES:
-            t = TECHNIQUES[tid]
-            pm = _proficiency_mult(prof.get(tid, 0))
-            max_hp += int(t["bonus_hp"] * pm)
-            atk += int(t["bonus_atk"] * pm)
-            defn += int(t["bonus_def"] * pm)
-
-    # 经脉加成
-    opened = json.loads(char["open_meridians"]) if char["open_meridians"] else []
-    for mid in opened:
-        if mid in MERIDIANS:
-            m = MERIDIANS[mid]
-            max_hp += m["bonus_hp"]
-            atk += m["bonus_atk"]
-            defn += m["bonus_def"]
-
-    # 灵宠战斗加成
-    active_pet_id = char["active_pet"]
-    if active_pet_id:
-        pets = json.loads(char["pets"]) if char["pets"] else []
-        for pet in pets:
-            if pet["id"] == active_pet_id:
-                ps = get_pet_stats(pet)
-                max_hp += int(ps["hp"] * PET_BATTLE_RATIO)
-                atk += int(ps["atk"] * PET_BATTLE_RATIO)
-                defn += int(ps["def"] * PET_BATTLE_RATIO)
-                break
-
-    return {"atk": atk, "def": defn, "max_hp": max_hp}
-
-def get_exp_needed(level):
-    if level >= MAX_LEVEL: return "-"
-    return EXP_PER_LEVEL[level] if level < len(EXP_PER_LEVEL) else EXP_PER_LEVEL[-1]
-
-def get_cultivation_mult(char):
-    """获取修炼速度总倍率（灵根 × 功法 × 熟练度）"""
-    mult = 1.0
-    sr = char["spirit_root"]
-    if sr and sr in SPIRIT_ROOTS:
-        mult *= SPIRIT_ROOTS[sr]["cultivation_mult"]
-    prof = _get_proficiency(char)
-    learned = json.loads(char["techniques"]) if char["techniques"] else []
-    for tid in learned:
-        if tid in TECHNIQUES:
-            pm = _proficiency_mult(prof.get(tid, 0))
-            mult += TECHNIQUES[tid]["bonus_exp_pct"] * pm
-    # 饰品修炼加成
-    ac = lookup_item(char["accessory"]) if char["accessory"] else None
-    if ac:
-        mult += ac.get("bonus_exp_pct", 0)
-    # 宗门贡献修炼加成
-    sect_rank = get_sect_rank(char["sect_contrib"] if char["sect_contrib"] else 0)
-    mult += SECT_RANKS[sect_rank]["bonus"]
-    return mult
-
-# ═══════════════ 熟练度系统 ═══════════════
-
-def _get_proficiency(char):
-    return json.loads(char["proficiency"]) if char["proficiency"] else {}
-
-def _set_proficiency(uid, prof):
-    update_character(uid, proficiency=json.dumps(prof))
-
-def _proficiency_mult(prof_val):
-    """熟练度→加成倍率：0熟练度=50%效果，满熟练度=100%效果"""
-    pct = prof_val / TECHNIQUE_MAX_PROFICIENCY
-    return 0.5 + 0.5 * pct
-
-def _gain_proficiency(char, uid, source="fight"):
-    """给所有已学功法增加熟练度，返回 {tech_id: gained} 字典"""
-    learned = json.loads(char["techniques"]) if char["techniques"] else []
-    if not learned:
-        return {}
-    prof = _get_proficiency(char)
-    gained = {}
-    for tid in learned:
-        if tid not in TECHNIQUES:
-            continue
-        cur = prof.get(tid, 0)
-        if cur >= TECHNIQUE_MAX_PROFICIENCY:
-            continue
-        tier = TECHNIQUES[tid].get("tier", "黄阶")
-        if source == "fight":
-            amount = TECHNIQUE_PROFICIENCY_TIERS.get(tier, 5)
-        else:  # meditate
-            amount = TECHNIQUE_MEDITATE_PROFICIENCY
-        new_val = min(TECHNIQUE_MAX_PROFICIENCY, cur + amount)
-        prof[tid] = new_val
-        gained[tid] = amount
-    if gained:
-        _set_proficiency(uid, prof)
-    return gained
-
-def process_offline_cultivation(char):
-    """计算离线挂机修为收益，返回 (gain, seconds)"""
-    if not char["last_active"]:
-        return 0, 0
-    try:
-        last = datetime.fromisoformat(char["last_active"])
-    except (ValueError, TypeError):
-        return 0, 0
-    elapsed = (datetime.utcnow() - last).total_seconds()
-    max_sec = IDLE_MAX_HOURS * 3600
-    elapsed = min(elapsed, max_sec)
-    if elapsed < 10:
-        return 0, 0
-    mult = get_cultivation_mult(char)
-    gain = int(IDLE_EXP_PER_SEC * elapsed * mult)
-    if get_exp_needed(char["level"]) == "-":
-        gain = 0
-    return max(0, gain), int(elapsed)
-
-def format_duration(seconds):
-    if seconds < 60: return f"{seconds}秒"
-    if seconds < 3600: return f"{seconds // 60}分钟"
-    h = seconds // 3600
-    m = (seconds % 3600) // 60
-    return f"{h}小时{m}分钟" if m else f"{h}小时"
-
-# 战斗文案
-ATTACK_VERBS = [
-    "催动灵力，一掌拍向{m}", "祭出飞剑，剑光一闪斩向{m}",
-    "凝聚灵力于拳，轰向{m}", "掐动法诀，一道灵光射向{m}",
-    "运转功法，灵力化作刀芒劈向{m}",
-]
-MONSTER_ATTACK_VERBS = [
-    "{m}怒吼一声，一爪拍来", "{m}张口喷出一道妖气",
-    "{m}浑身妖力暴涨，猛扑过来", "{m}凝聚妖力，化作暗影袭来",
-]
-
-def fmt_attack(n): return random.choice(ATTACK_VERBS).format(m=n)
-def fmt_monster_attack(n): return random.choice(MONSTER_ATTACK_VERBS).format(m=n)
+# ═══════════════ 战斗文案（使用 game.combat） ═══════════════
+from game.combat import fmt_attack, fmt_monster_attack
 
 # ═══════════════ 路由 ═══════════════
 
@@ -299,6 +171,7 @@ def register():
         if len(password) < 4:
             return render_template("index.html", page="register", error="密令至少4个字符")
         if create_user(username, hash_password(password)):
+            logger.info("新用户注册：%s", username)
             return render_template("index.html", page="login", success="注册成功，请登录踏入仙途")
         return render_template("index.html", page="register", error="此道号已被他人所用")
     return render_template("index.html", page="register")
@@ -309,9 +182,16 @@ def login():
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "").strip()
         user = get_user(username)
-        if user and user["password_hash"] == hash_password(password):
+        if user and verify_password(password, user["password_hash"]):
+            # 自动迁移旧的 SHA-256 密码到安全哈希
+            if not (user["password_hash"].startswith("pbkdf2:") or user["password_hash"].startswith("scrypt:")):
+                from models import get_db
+                with get_db() as conn:
+                    conn.execute("UPDATE users SET password_hash = ? WHERE id = ?",
+                                 (hash_password(password), user["id"]))
             session["user_id"] = user["id"]
             session["username"] = user["username"]
+            logger.info("用户登录：%s", username)
             char = get_character(user["id"])
             if char:
                 return redirect(url_for("game"))
@@ -415,7 +295,7 @@ def handle_get_state():
         sr_info = {"id": sr_id, "name": sr["name"], "desc": sr["desc"], "element": sr["element"]}
 
     # 功法信息（含熟练度）
-    prof = _get_proficiency(char)
+    prof = get_proficiency(char)
     learned_tech = []
     for tid in (json.loads(char["techniques"]) if char["techniques"] else []):
         if tid in TECHNIQUES:
@@ -485,102 +365,72 @@ def handle_move(data):
 
     emit("player_moved", {"player": session["username"], "to": target, "to_name": new_loc["name"]}, broadcast=True, include_self=False, namespace="/")
 
-    # 奇遇判定
+    # 奇遇判定（使用 game.events 模块）
     char = get_character(session["user_id"])
-    check_fortune(char)
+    fortune = check_fortune(char)
+    if fortune:
+        emit("fortune_event", fortune)
 
     # 突发事件判定（移动类）
     char = get_character(session["user_id"])
-    process_surprise(char, "move")
+    surprise = process_surprise(char, "move")
+    if surprise:
+        emit("game_msg", {"text": surprise["text"], "type": "info"})
+        _apply_surprise_effect(char, surprise)
 
     # 任务进度（访问类）
     char = get_character(session["user_id"])
-    _check_quest_progress(char, "visit", target)
+    changed, updated_quests = check_quest_progress(char, "visit", target)
+    if changed:
+        update_character(session["user_id"], active_quests=json.dumps(updated_quests))
 
     handle_get_state()
 
 
-def check_fortune(char):
-    """奇遇判定"""
-    for event in FORTUNE_EVENTS:
-        if random.random() < event["chance"]:
-            emit("fortune_event", {
-                "title": event["title"],
-                "text": event["text"],
-                "choices": [{"index": i, "text": c["text"]} for i, c in enumerate(event["choices"])],
-                "event_id": event["id"],
-            })
-            return
-
-
-def process_surprise(char, trigger):
-    """处理突发事件"""
+def _apply_surprise_effect(char, surprise):
+    """应用突发事件效果"""
     uid = session["user_id"]
-    for evt in SURPRISE_EVENTS:
-        if evt["trigger"] != trigger or random.random() >= evt["chance"]:
-            continue
-        emit("game_msg", {"text": f"【突发】{evt['text']}", "type": "info"})
-        eff = evt.get("effect")
-        if eff == "extra_fight":
-            # 触发一次额外战斗
-            handle_fight()
-            return
-        elif eff == "exp_boost":
-            gain = random.randint(*evt["value_range"])
-            update_character(uid, exp=char["exp"] + gain)
-            emit("game_msg", {"text": f"修为提升 {gain}！", "type": "buff"})
-            char["exp"] += gain
-        elif eff == "gold_gain":
-            gain = random.randint(*evt["value_range"])
-            update_character(uid, gold=char["gold"] + gain)
-            emit("game_msg", {"text": f"获得 {gain} 灵石。", "type": "shop"})
-            char["gold"] += gain
-        elif eff == "herb_gain":
-            herb = random.choice(evt["herb_pool"])
-            count = random.randint(*evt["count_range"])
-            inv = get_character_inventory(uid)
-            inv[herb] = inv.get(herb, 0) + count
-            set_character_inventory(uid, inv)
-            emit("game_msg", {"text": f"获得【{ITEMS[herb]['name']}】x{count}！", "type": "shop"})
-        elif eff == "heal_partial":
-            stats = get_full_stats(char)
-            heal = random.randint(*evt["value_range"])
-            new_hp = min(char["hp"] + heal, stats["max_hp"])
-            update_character(uid, hp=new_hp)
-            emit("game_msg", {"text": f"恢复了 {new_hp - char['hp']} 气血。", "type": "heal"})
-            char["hp"] = new_hp
-        elif eff == "storm":
-            stats = get_full_stats(char)
-            hp_loss = int(stats["max_hp"] * evt["hp_loss_pct"])
-            exp_gain = random.randint(*evt["exp_gain_range"])
-            new_hp = max(1, char["hp"] - hp_loss)
-            update_character(uid, hp=new_hp, exp=char["exp"] + exp_gain)
-            emit("game_msg", {"text": f"损失 {hp_loss} 气血，但修为提升 {exp_gain}。", "type": "info"})
-            char["hp"] = new_hp
-            char["exp"] += exp_gain
-        elif eff == "item_gain":
-            inv = get_character_inventory(uid)
-            inv[evt["item"]] = inv.get(evt["item"], 0) + evt["count"]
-            set_character_inventory(uid, inv)
-            emit("game_msg", {"text": f"获得【{ITEMS[evt['item']]['name']}】x{evt['count']}！", "type": "shop"})
-        elif eff == "loot_cache":
-            inv = get_character_inventory(uid)
-            for item_id, count, chance in evt["items"]:
-                if random.random() < chance:
-                    inv[item_id] = inv.get(item_id, 0) + count
-                    emit("game_msg", {"text": f"获得【{ITEMS[item_id]['name']}】x{count}！", "type": "shop"})
-            gold_gain = random.randint(*evt["gold_range"])
-            set_character_inventory(uid, inv)
-            update_character(uid, gold=char["gold"] + gold_gain)
-            char["gold"] += gold_gain
-        elif eff == "material_gain":
-            mat = random.choice(evt["mat_pool"])
-            count = random.randint(*evt["count_range"])
-            inv = get_character_inventory(uid)
-            inv[mat] = inv.get(mat, 0) + count
-            set_character_inventory(uid, inv)
-            emit("game_msg", {"text": f"获得【{ITEMS[mat]['name']}】x{count}！", "type": "shop"})
-        return  # 只触发一个突发事件
+    action = surprise.get("action")
+    if action == "extra_fight":
+        handle_fight()
+    elif action == "exp_boost":
+        update_character(uid, exp=char["exp"] + surprise["gain"])
+        emit("game_msg", {"text": f"修为提升 {surprise['gain']}！", "type": "buff"})
+    elif action == "gold_gain":
+        update_character(uid, gold=char["gold"] + surprise["gain"])
+        emit("game_msg", {"text": f"获得 {surprise['gain']} 灵石。", "type": "shop"})
+    elif action == "herb_gain":
+        inv = get_character_inventory(uid)
+        inv[surprise["herb"]] = inv.get(surprise["herb"], 0) + surprise["count"]
+        set_character_inventory(uid, inv)
+        emit("game_msg", {"text": f"获得【{ITEMS[surprise['herb']]['name']}】x{surprise['count']}！", "type": "shop"})
+    elif action == "heal_partial":
+        new_hp = min(char["hp"] + surprise["heal"], surprise["max_hp"])
+        update_character(uid, hp=new_hp)
+        emit("game_msg", {"text": f"恢复了 {new_hp - char['hp']} 气血。", "type": "heal"})
+    elif action == "storm":
+        new_hp = max(1, char["hp"] - surprise["hp_loss"])
+        update_character(uid, hp=new_hp, exp=char["exp"] + surprise["exp_gain"])
+        emit("game_msg", {"text": f"损失 {surprise['hp_loss']} 气血，但修为提升 {surprise['exp_gain']}。", "type": "info"})
+    elif action == "item_gain":
+        inv = get_character_inventory(uid)
+        inv[surprise["item"]] = inv.get(surprise["item"], 0) + surprise["count"]
+        set_character_inventory(uid, inv)
+        emit("game_msg", {"text": f"获得【{ITEMS[surprise['item']]['name']}】x{surprise['count']}！", "type": "shop"})
+    elif action == "loot_cache":
+        inv = get_character_inventory(uid)
+        for item_id, count, chance in surprise["items"]:
+            if random.random() < chance:
+                inv[item_id] = inv.get(item_id, 0) + count
+                emit("game_msg", {"text": f"获得【{ITEMS[item_id]['name']}】x{count}！", "type": "shop"})
+        gold_gain = random.randint(*surprise["gold_range"])
+        set_character_inventory(uid, inv)
+        update_character(uid, gold=char["gold"] + gold_gain)
+    elif action == "material_gain":
+        inv = get_character_inventory(uid)
+        inv[surprise["mat"]] = inv.get(surprise["mat"], 0) + surprise["count"]
+        set_character_inventory(uid, inv)
+        emit("game_msg", {"text": f"获得【{ITEMS[surprise['mat']]['name']}】x{surprise['count']}！", "type": "shop"})
 
 
 @socketio.on("fortune_choice")
@@ -601,315 +451,11 @@ def handle_fortune_choice(data):
         return
 
     outcome = event["choices"][choice_idx]["outcome"]
-    process_fortune_outcome(char, outcome)
-
-
-def _try_learn_technique(char, uid):
-    """尝试随机学习一门功法，返回是否成功"""
-    learned = json.loads(char["techniques"]) if char["techniques"] else []
-    available = [tid for tid, t in TECHNIQUES.items() if tid not in learned and char["level"] >= t["req_realm"]]
-    if available:
-        chosen = random.choice(available)
-        learned.append(chosen)
-        update_character(uid, techniques=json.dumps(learned))
-        t = TECHNIQUES[chosen]
-        emit("game_msg", {"text": f"你领悟了【{t['name']}】（{t['tier']}）！", "type": "buff"})
-        return True
-    return False
-
-def _give_random_item(uid, pool=None):
-    """随机给一个物品，返回item_id"""
-    if pool is None:
-        pool = [("peiyuan_dan", 0.3), ("huichun_dan", 0.3), ("liliang_fulu", 0.15), ("huti_fulu", 0.15), ("pojing_dan", 0.1)]
-    r = random.random()
-    cum = 0
-    chosen = pool[0][0]
-    for item_id, chance in pool:
-        cum += chance
-        if r < cum:
-            chosen = item_id
-            break
-    inv = get_character_inventory(uid)
-    inv[chosen] = inv.get(chosen, 0) + 1
-    set_character_inventory(uid, inv)
-    emit("game_msg", {"text": f"你获得了一枚【{ITEMS[chosen]['name']}】！", "type": "shop"})
-    return chosen
-
-def process_fortune_outcome(char, outcome):
-    uid = session["user_id"]
-    if outcome == "nothing":
-        emit("game_msg", {"text": "你谨慎地选择了离开。", "type": "info"})
-
-    elif outcome == "heal_full":
-        stats = get_full_stats(char)
-        update_character(uid, hp=stats["max_hp"])
-        emit("game_msg", {"text": "你运转功法调息，气血完全恢复，灵台一片清明。", "type": "heal"})
-
-    elif outcome == "reward_random":
-        _give_random_item(uid)
-
-    elif outcome == "reward_technique":
-        if not _try_learn_technique(char, uid):
-            gold_gain = random.randint(50, 150)
-            update_character(uid, gold=char["gold"] + gold_gain)
-            emit("game_msg", {"text": f"虽未领悟功法，但你感悟颇多，获得 {gold_gain} 灵石。", "type": "shop"})
-
-    elif outcome == "reward_technique_or_item":
-        if not _try_learn_technique(char, uid):
-            _give_random_item(uid)
-
-    elif outcome == "reward_technique_or_exp":
-        if not _try_learn_technique(char, uid):
-            gain = random.randint(50, 120)
-            update_character(uid, exp=char["exp"] + gain)
-            emit("game_msg", {"text": f"虽未领悟功法，但老者的点拨让你感悟颇深，修为提升 {gain}！", "type": "buff"})
-
-    elif outcome == "reward_technique_or_gold":
-        if not _try_learn_technique(char, uid):
-            gold_gain = random.randint(60, 180)
-            update_character(uid, gold=char["gold"] + gold_gain)
-            emit("game_msg", {"text": f"此人感激涕零，将全部身家 {gold_gain} 灵石赠予你。", "type": "shop"})
-
-    elif outcome == "reward_exp_small":
-        gain = random.randint(15, 40)
-        update_character(uid, exp=char["exp"] + gain)
-        emit("game_msg", {"text": f"你略有所悟，修为提升 {gain}。", "type": "buff"})
-
-    elif outcome == "reward_exp_big":
-        gain = random.randint(40, 100)
-        update_character(uid, exp=char["exp"] + gain)
-        emit("game_msg", {"text": f"你感悟颇深，灵力涌入丹田，修为提升 {gain}！", "type": "buff"})
-
-    elif outcome == "reward_exp_huge":
-        gain = random.randint(100, 300)
-        update_character(uid, exp=char["exp"] + gain)
-        emit("game_msg", {"text": f"天地法则涌入你的识海，修为暴涨 {gain}！丹田中灵力翻涌不止！", "type": "buff"})
-
-    elif outcome == "reward_exp_big_or_damage":
-        if random.random() < 0.5:
-            gain = random.randint(40, 100)
-            update_character(uid, exp=char["exp"] + gain)
-            emit("game_msg", {"text": f"老者目光一闪，一道灵力涌入你的识海——修为提升 {gain}！「不错，有胆识。」", "type": "buff"})
-        else:
-            stats = get_full_stats(char)
-            dmg = stats["max_hp"] // 6
-            new_hp = max(1, char["hp"] - dmg)
-            update_character(uid, hp=new_hp)
-            emit("game_msg", {"text": f"老者轻哼一声，一股无形的压力将你震退——你受到 {dmg} 点伤害。「不知天高地厚。」", "type": "error"})
-
-    elif outcome == "reward_exp_huge_or_trap":
-        if random.random() < 0.4:
-            gain = random.randint(100, 300)
-            update_character(uid, exp=char["exp"] + gain)
-            emit("game_msg", {"text": f"你成功深入遗迹核心，获得上古大能的残余传承——修为暴涨 {gain}！", "type": "buff"})
-        else:
-            stats = get_full_stats(char)
-            dmg = stats["max_hp"] // 3
-            new_hp = max(1, char["hp"] - dmg)
-            update_character(uid, hp=new_hp)
-            emit("game_msg", {"text": f"遗迹中的阵法突然发动！一道灵光击中你——受到 {dmg} 点伤害，你狼狈逃出。", "type": "error"})
-
-    elif outcome == "reward_item_huichun":
-        inv = get_character_inventory(uid)
-        inv["huichun_dan"] = inv.get("huichun_dan", 0) + 2
-        set_character_inventory(uid, inv)
-        emit("game_msg", {"text": "你装了两瓶灵泉水，效果堪比【回春丹】。", "type": "shop"})
-
-    elif outcome == "reward_item_peiyuan":
-        inv = get_character_inventory(uid)
-        inv["peiyuan_dan"] = inv.get("peiyuan_dan", 0) + 1
-        set_character_inventory(uid, inv)
-        emit("game_msg", {"text": "你获得了一枚散发着清香的【培元丹】！", "type": "shop"})
-
-    elif outcome == "reward_item_peiyuan_or_pojing":
-        if random.random() < 0.3:
-            inv = get_character_inventory(uid)
-            inv["pojing_dan"] = inv.get("pojing_dan", 0) + 1
-            set_character_inventory(uid, inv)
-            emit("game_msg", {"text": "你以灵力探入石珠，珠中竟封印着一枚【破境丹】！此物价值连城！", "type": "shop"})
-        else:
-            inv = get_character_inventory(uid)
-            inv["peiyuan_dan"] = inv.get("peiyuan_dan", 0) + 2
-            set_character_inventory(uid, inv)
-            emit("game_msg", {"text": "石珠解封后化作两枚【培元丹】，也算不错。", "type": "shop"})
-
-    elif outcome == "reward_item_multiple":
-        inv = get_character_inventory(uid)
-        for item_id in random.sample(["huiqi_dan","huichun_dan","peiyuan_dan","lingcao","bingling_cao"], 3):
-            inv[item_id] = inv.get(item_id, 0) + 1
-        set_character_inventory(uid, inv)
-        update_character(uid, gold=char["gold"] - 50)
-        emit("game_msg", {"text": "你花了50灵石买了好几样东西，其中混着那枚石珠。收获颇丰。", "type": "shop"})
-
-    elif outcome == "reward_item_or_nothing":
-        if random.random() < 0.5:
-            _give_random_item(uid, [("peiyuan_dan", 0.4), ("pojing_dan", 0.1), ("juling_dan", 0.3), ("wudao_dan", 0.2)])
-        else:
-            emit("game_msg", {"text": "你犹豫太久，玉简已被他人拍走。", "type": "error"})
-
-    elif outcome == "reward_item_rare":
-        inv = get_character_inventory(uid)
-        rare = random.choice(["pojing_dan", "juling_dan", "wudao_dan", "jiuzhuan_dan"])
-        inv[rare] = inv.get(rare, 0) + 1
-        set_character_inventory(uid, inv)
-        emit("game_msg", {"text": f"玉佩灵光一闪，化作一枚【{ITEMS[rare]['name']}】落入你掌中。因果了却，灵台通明。", "type": "shop"})
-
-    elif outcome == "reward_item_rare_or_trap":
-        if random.random() < 0.5:
-            inv = get_character_inventory(uid)
-            rare = random.choice(["wanling_guo","longxian_cao","fengxue_hua"])
-            inv[rare] = inv.get(rare, 0) + 2
-            set_character_inventory(uid, inv)
-            emit("game_msg", {"text": f"鸟卵中蕴含着浓郁灵气，化作两株【{ITEMS[rare]['name']}】。", "type": "shop"})
-        else:
-            stats = get_full_stats(char)
-            dmg = stats["max_hp"] // 4
-            new_hp = max(1, char["hp"] - dmg)
-            update_character(uid, hp=new_hp)
-            emit("game_msg", {"text": f"你刚伸手，青鸾暴怒之下一爪拍来！受到 {dmg} 点伤害，你仓皇逃走。", "type": "error"})
-
-    elif outcome == "reward_item_scroll":
-        inv = get_character_inventory(uid)
-        scroll = random.choice(["liliang_fulu","huti_fulu","qifu_fulu"])
-        inv[scroll] = inv.get(scroll, 0) + 1
-        set_character_inventory(uid, inv)
-        emit("game_msg", {"text": f"你拓印了壁画内容，制成一枚【{ITEMS[scroll]['name']}】。", "type": "shop"})
-
-    elif outcome == "reward_herbs":
-        inv = get_character_inventory(uid)
-        herbs = random.choice(["lingcao", "bingling_cao", "huoling_hua"])
-        count = random.randint(2, 4)
-        inv[herbs] = inv.get(herbs, 0) + count
-        set_character_inventory(uid, inv)
-        emit("game_msg", {"text": f"你悄悄采摘了 {count} 株【{ITEMS[herbs]['name']}】，巨蟒并未察觉。", "type": "shop"})
-
-    elif outcome == "reward_herbs_rare":
-        inv = get_character_inventory(uid)
-        rare = random.choice(["wanling_guo","longxian_cao","fengxue_hua"])
-        inv[rare] = inv.get(rare, 0) + 1
-        set_character_inventory(uid, inv)
-        emit("game_msg", {"text": f"你以一枚回气丹换取巨蟒的信任，它竟从谷底叼来一株【{ITEMS[rare]['name']}】赠你。", "type": "shop"})
-
-    elif outcome == "reward_herbs_poison_or_fight":
-        if random.random() < 0.6:
-            inv = get_character_inventory(uid)
-            inv["dueling_teng"] = inv.get("dueling_teng", 0) + 3
-            inv["bingling_cao"] = inv.get("bingling_cao", 0) + 1
-            set_character_inventory(uid, inv)
-            emit("game_msg", {"text": "你屏息潜入，成功采得毒灵藤x3和冰灵草x1，迅速撤离。", "type": "shop"})
-        else:
-            emit("game_msg", {"text": "你刚靠近毒灵藤，沼泽中一头毒蟒猛然窜出！", "type": "error"})
-            handle_fight()
-
-    elif outcome == "reward_gold_bad" or outcome == "reward_gold_small":
-        gain = random.randint(20, 60)
-        update_character(uid, gold=char["gold"] + gain)
-        emit("game_msg", {"text": f"你获得 {gain} 灵石。", "type": "shop"})
-
-    elif outcome == "reward_gold_big_or_trap":
-        if random.random() < 0.4:
-            gold_gain = random.randint(100, 300)
-            inv = get_character_inventory(uid)
-            for mid in random.sample(["yaodan","yaogu","yaopimo"], 2):
-                inv[mid] = inv.get(mid, 0) + 2
-            set_character_inventory(uid, inv)
-            update_character(uid, gold=char["gold"] + gold_gain)
-            emit("game_msg", {"text": f"储物戒指中竟有 {gold_gain} 灵石和大量妖兽材料！你发财了！", "type": "shop"})
-        else:
-            stats = get_full_stats(char)
-            dmg = stats["max_hp"] // 3
-            new_hp = max(1, char["hp"] - dmg)
-            update_character(uid, hp=new_hp)
-            emit("game_msg", {"text": f"你刚触碰飞剑，洞府中沉寂万年的守护阵法轰然发动！一道灵光击中你——受到 {dmg} 点伤害。", "type": "error"})
-
-    elif outcome == "reward_materials":
-        inv = get_character_inventory(uid)
-        for mid in random.sample(["hantie_kuang","xuanjin_shi","yaodan"], 2):
-            inv[mid] = inv.get(mid, 0) + random.randint(1, 3)
-        set_character_inventory(uid, inv)
-        emit("game_msg", {"text": "你小心收集了陨落之地散落的矿石和材料。", "type": "shop"})
-
-    elif outcome == "reward_materials_or_trap":
-        if random.random() < 0.5:
-            inv = get_character_inventory(uid)
-            for mid in random.sample(["xuanjin_shi","tianwai_yuntie","yaodan"], 2):
-                inv[mid] = inv.get(mid, 0) + random.randint(1, 2)
-            set_character_inventory(uid, inv)
-            emit("game_msg", {"text": "你破解了阵法，搜刮了洞府中的矿石和材料。", "type": "shop"})
-        else:
-            stats = get_full_stats(char)
-            dmg = stats["max_hp"] // 4
-            new_hp = max(1, char["hp"] - dmg)
-            update_character(uid, hp=new_hp)
-            emit("game_msg", {"text": f"你触碰物品的瞬间，噬灵阵轰然发动！受到 {dmg} 点伤害，你拼命逃出。", "type": "error"})
-
-    elif outcome == "reward_materials_rare":
-        inv = get_character_inventory(uid)
-        inv["tianwai_yuntie"] = inv.get("tianwai_yuntie", 0) + 2
-        inv["zijin_kuang"] = inv.get("zijin_kuang", 0) + 1
-        set_character_inventory(uid, inv)
-        update_character(uid, exp=char["exp"] + random.randint(30, 80))
-        emit("game_msg", {"text": "你第一个赶到陨落之地，拾得天外陨铁x2、紫金矿x1，混沌之气令修为精进！", "type": "shop"})
-
-    elif outcome == "trap_damage":
-        stats = get_full_stats(char)
-        dmg = stats["max_hp"] // 4
-        new_hp = max(1, char["hp"] - dmg)
-        update_character(uid, hp=new_hp)
-        emit("game_msg", {"text": f"你强行破阵，受到 {dmg} 点伤害，总算逃出生天。", "type": "error"})
-
-    elif outcome == "trap_damage_big":
-        stats = get_full_stats(char)
-        dmg = stats["max_hp"] // 3
-        new_hp = max(1, char["hp"] - dmg)
-        update_character(uid, hp=new_hp)
-        emit("game_msg", {"text": f"丹药入喉，化作一股灼热的毒气侵蚀经脉——受到 {dmg} 点伤害！你猛然惊醒，心魔消散。", "type": "error"})
-
-    elif outcome == "trap_pay":
-        cost = min(char["gold"], random.randint(20, 80))
-        update_character(uid, gold=char["gold"] - cost)
-        emit("game_msg", {"text": f"你丢下 {cost} 灵石，趁机脱身。", "type": "error"})
-
-    elif outcome == "fight_bandit" or outcome == "fight_demon_boss":
+    messages, action = process_fortune_outcome(char, outcome, session["user_id"])
+    for m in messages:
+        emit("game_msg", m)
+    if action == "fight":
         handle_fight()
-
-    elif outcome == "reward_egg_common":
-        inv = get_character_inventory(uid)
-        inv["egg_common"] = inv.get("egg_common", 0) + 1
-        set_character_inventory(uid, inv)
-        emit("game_msg", {"text": "你小心翼翼地将灵兽蛋收入储物袋。回去后可以尝试孵化。", "type": "shop"})
-
-    elif outcome == "reward_egg_rare":
-        inv = get_character_inventory(uid)
-        inv["egg_rare"] = inv.get("egg_rare", 0) + 1
-        set_character_inventory(uid, inv)
-        emit("game_msg", {"text": "你将这枚灵气氤氲的灵兽蛋收入囊中，心中一阵激动。", "type": "shop"})
-
-    elif outcome == "reward_egg_rare_or_fight":
-        if random.random() < 0.4:
-            inv = get_character_inventory(uid)
-            inv["egg_rare"] = inv.get("egg_rare", 0) + 1
-            set_character_inventory(uid, inv)
-            emit("game_msg", {"text": "母兽归来，见你并无恶意，竟将一枚灵兽蛋推向你——它似乎在托付自己的孩子。", "type": "shop"})
-        else:
-            emit("game_msg", {"text": "母兽归来，见你站在洞口，怒吼一声扑了过来！", "type": "error"})
-            handle_fight()
-
-    elif outcome == "reward_egg_legend_or_rare":
-        if random.random() < 0.3:
-            inv = get_character_inventory(uid)
-            inv["egg_legend"] = inv.get("egg_legend", 0) + 1
-            set_character_inventory(uid, inv)
-            emit("game_msg", {"text": "灵力探入蛋壳，你感应到一股磅礴的生命力——这竟是一枚传说级灵兽蛋！", "type": "buff"})
-        else:
-            inv = get_character_inventory(uid)
-            inv["egg_rare"] = inv.get("egg_rare", 0) + 1
-            set_character_inventory(uid, inv)
-            emit("game_msg", {"text": "灵力探查后确认这是一枚品质不错的灵兽蛋，收入囊中。", "type": "shop"})
-
-    else:
-        emit("game_msg", {"text": "你平静地离开了。", "type": "info"})
-
     handle_get_state()
 
 
@@ -1001,7 +547,7 @@ def handle_fight():
         gold_gain = monster["gold"] + random.randint(0, monster["gold"] // 2)
 
         # 熟练度增长
-        prof_gained = _gain_proficiency(char, session["user_id"], source="fight")
+        prof_gained = gain_proficiency(char, session["user_id"], source="fight")
         prof_parts = []
         for tid, amt in prof_gained.items():
             prof_parts.append(f"{TECHNIQUES[tid]['name']}+{amt}")
@@ -1104,7 +650,7 @@ def handle_meditate():
         return
     stats = get_full_stats(char)
     # 熟练度增长
-    prof_gained = _gain_proficiency(char, session["user_id"], source="meditate")
+    prof_gained = gain_proficiency(char, session["user_id"], source="meditate")
     prof_parts = [f"{TECHNIQUES[tid]['name']}+{amt}" for tid, amt in prof_gained.items() if tid in TECHNIQUES]
     prof_msg = f" 熟练度提升（{', '.join(prof_parts)}）。" if prof_parts else ""
 
@@ -1155,6 +701,7 @@ def handle_breakthrough():
         new_stats = calc_level_stats(new_lv)
         update_character(session["user_id"], level=new_lv, max_hp=new_stats["max_hp"], atk=new_stats["atk"], def_stat=new_stats["def_stat"], hp=new_stats["max_hp"])
         new_realm = realm_name(new_lv)
+        logger.info("突破成功：%s -> %s (Lv.%d)", session["username"], new_realm, new_lv)
         emit("game_msg", {"text": f"体内灵力暴涌，丹田剧烈震动——突破成功！你已迈入{new_realm}！", "type": "heal"})
         emit("system_msg", {"text": f"天道感应：{session['username']} 突破至 {new_realm}，引发天地异象！"}, broadcast=True, namespace="/")
     else:
@@ -2096,85 +1643,7 @@ def handle_combine_fragments(data):
     handle_get_state()
 
 
-# ═══════════════ NPC系统 ═══════════════
-
-def _get_goodwill(char):
-    return json.loads(char["npc_goodwill"]) if char["npc_goodwill"] else {}
-
-def _get_active_quests(char):
-    return json.loads(char["active_quests"]) if char["active_quests"] else []
-
-def _get_completed_quests(char):
-    return json.loads(char["completed_quests"]) if char["completed_quests"] else []
-
-def _get_gift_dates(char):
-    return json.loads(char["npc_gift_date"]) if char["npc_gift_date"] else {}
-
-def get_npc_info_for_location(char):
-    """获取当前地点的NPC信息"""
-    loc_id = char["location"]
-    goodwill = _get_goodwill(char)
-    today = datetime.utcnow().strftime("%Y-%m-%d")
-    gift_dates = _get_gift_dates(char)
-    result = []
-    for nid, npc in NPCS.items():
-        if npc["location"] != loc_id:
-            continue
-        gw = goodwill.get(nid, 0)
-        tier = get_goodwill_tier(gw)
-        # 选择对话
-        dialogues = npc["dialogues"].get(tier, npc["dialogues"][0])
-        # 境界对话
-        realm_text = ""
-        for (lo, hi), text in npc.get("realm_dialogues", {}).items():
-            if lo <= char["level"] <= hi:
-                realm_text = text
-                break
-        # 今日是否已赠礼
-        can_gift = gift_dates.get(nid) != today
-        result.append({
-            "id": nid, "name": npc["name"], "title": npc["title"],
-            "type": npc["type"], "realm": realm_name(npc["realm"]),
-            "goodwill": gw, "goodwill_tier": tier,
-            "goodwill_tier_name": NPC_GOODWILL_TIERS[tier]["name"],
-            "dialogue": random.choice(dialogues),
-            "realm_dialogue": realm_text,
-            "can_gift": can_gift,
-        })
-    return result
-
-def get_quest_info(char):
-    """获取当前活跃任务信息"""
-    active = _get_active_quests(char)
-    completed = _get_completed_quests(char)
-    result = []
-    for q in active:
-        quest = QUESTS.get(q["id"])
-        if not quest: continue
-        progress = []
-        for obj_type, obj_data in quest["objectives"].items():
-            if obj_type == "kill":
-                for mid, need in obj_data.items():
-                    done = q["progress"].get(f"kill_{mid}", 0)
-                    progress.append({"desc": f"击杀{MONSTERS.get(mid,{}).get('name',mid)}", "done": done, "need": need})
-            elif obj_type == "collect":
-                for iid, need in obj_data.items():
-                    done = q["progress"].get(f"collect_{iid}", 0)
-                    progress.append({"desc": f"收集{ITEMS.get(iid,{}).get('name',iid)}", "done": done, "need": need})
-            elif obj_type == "visit":
-                for lid in obj_data:
-                    done = q["progress"].get(f"visit_{lid}", 0)
-                    progress.append({"desc": f"到达{LOCATIONS.get(lid,{}).get('name',lid)}", "done": 1 if done else 0, "need": 1})
-            elif obj_type == "kill_any":
-                done = q["progress"].get("kill_any", 0)
-                progress.append({"desc": f"击杀任意妖兽", "done": done, "need": obj_data})
-        result.append({"id": q["id"], "name": quest["name"], "desc": quest["desc"], "npc": quest["npc"], "progress": progress})
-    return {"active": result, "completed_count": len(completed)}
-
-def get_sect_info(char):
-    contrib = char["sect_contrib"] if char["sect_contrib"] else 0
-    rank = get_sect_rank(contrib)
-    return {"contrib": contrib, "rank": rank, "rank_name": SECT_RANKS[rank]["name"], "bonus": SECT_RANKS[rank]["bonus"], "desc": SECT_RANKS[rank]["desc"]}
+# ═══════════════ NPC系统（使用 game.npc 模块） ═══════════════
 
 
 @socketio.on("npc_interact")
@@ -2183,52 +1652,19 @@ def handle_npc_interact(data):
     char = get_character(session["user_id"])
     if not char: return
     nid = data.get("npc_id")
-    if not nid or nid not in NPCS: return
-    npc = NPCS[nid]
-    if npc["location"] != char["location"]:
-        emit("game_msg", {"text": "此地并无此人。", "type": "error"})
+
+    result = interact_with_npc(char, session["user_id"], nid)
+    if not result["success"]:
+        if result.get("message"):
+            emit("game_msg", {"text": result["message"], "type": "error"})
         return
-    # 每日首次对话+1好感
-    gw = _get_goodwill(char)
-    today = datetime.utcnow().strftime("%Y-%m-%d")
-    gift_dates = _get_gift_dates(char)
-    daily_key = f"daily_{nid}"
-    if gift_dates.get(daily_key) != today:
-        gw[nid] = gw.get(nid, 0) + 1
-        gift_dates[daily_key] = today
-        update_character(session["user_id"], npc_goodwill=json.dumps(gw), npc_gift_date=json.dumps(gift_dates))
 
-    # 返回NPC详细信息（含可用任务）
-    goodwill = gw.get(nid, 0)
-    tier = get_goodwill_tier(goodwill)
-    dialogues = npc["dialogues"].get(tier, npc["dialogues"][0])
-    realm_text = ""
-    for (lo, hi), text in npc.get("realm_dialogues", {}).items():
-        if lo <= char["level"] <= hi:
-            realm_text = text
-            break
+    if result["goodwill_changed"]:
+        update_character(session["user_id"],
+                         npc_goodwill=json.dumps(result["updated_goodwill"]),
+                         npc_gift_date=json.dumps(result["updated_gift_dates"]))
 
-    # 可接任务
-    completed = _get_completed_quests(char)
-    active_ids = [q["id"] for q in _get_active_quests(char)]
-    available_quests = []
-    for qid, q in QUESTS.items():
-        if q["npc"] != nid: continue
-        if qid in active_ids: continue
-        if not q["daily"] and qid in completed: continue
-        if char["level"] < q["req_realm"]: continue
-        available_quests.append({"id": qid, "name": q["name"], "desc": q["desc"], "daily": q["daily"],
-                                 "accept_text": q.get("accept_text", "")})
-
-    emit("npc_detail", {
-        "id": nid, "name": npc["name"], "title": npc["title"],
-        "type": npc["type"], "goodwill": goodwill, "goodwill_tier": tier,
-        "goodwill_tier_name": NPC_GOODWILL_TIERS[tier]["name"],
-        "dialogue": random.choice(dialogues),
-        "realm_dialogue": realm_text,
-        "available_quests": available_quests,
-        "gift_preferences": npc.get("gift_preferences", {}),
-    })
+    emit("npc_detail", result["detail"])
 
 
 @socketio.on("npc_gift")
@@ -2238,41 +1674,20 @@ def handle_npc_gift(data):
     if not char: return
     nid = data.get("npc_id")
     item_id = data.get("item")
-    if not nid or nid not in NPCS or not item_id: return
-
-    today = datetime.utcnow().strftime("%Y-%m-%d")
-    gift_dates = _get_gift_dates(char)
-    if gift_dates.get(nid) == today:
-        emit("game_msg", {"text": "今日已经赠过礼了，明日再来。", "type": "error"})
-        return
 
     inv = get_character_inventory(session["user_id"])
-    if inv.get(item_id, 0) <= 0:
-        emit("game_msg", {"text": "你没有这个物品。", "type": "error"})
+    result = give_npc_gift(char, inv, nid, item_id)
+
+    if not result["success"]:
+        emit("game_msg", {"text": result["message"], "type": "error"})
         return
 
-    npc = NPCS[nid]
-    prefs = npc.get("gift_preferences", {})
-    if item_id in prefs.get("liked", []):
-        change = prefs.get("liked_value", 3)
-    elif item_id in prefs.get("disliked", []):
-        change = prefs.get("disliked_value", -2)
-    else:
-        change = 1
-
-    inv[item_id] -= 1
-    if inv[item_id] <= 0: del inv[item_id]
-    set_character_inventory(session["user_id"], inv)
-
-    gw = _get_goodwill(char)
-    gw[nid] = max(0, gw.get(nid, 0) + change)
-    gift_dates[nid] = today
-    update_character(session["user_id"], npc_goodwill=json.dumps(gw), npc_gift_date=json.dumps(gift_dates))
-
-    if change > 0:
-        emit("game_msg", {"text": f"你将【{ITEMS[item_id]['name']}】赠予{npc['name']}，好感度+{change}。", "type": "heal"})
-    else:
-        emit("game_msg", {"text": f"你将【{ITEMS[item_id]['name']}】赠予{npc['name']}，但对方似乎不太喜欢……好感度{change}。", "type": "error"})
+    set_character_inventory(session["user_id"], result["updated_inv"])
+    update_character(session["user_id"],
+                     npc_goodwill=json.dumps(result["updated_goodwill"]),
+                     npc_gift_date=json.dumps(result["updated_gift_dates"]))
+    mtype = "heal" if "好感度+" in result["message"] else "error"
+    emit("game_msg", {"text": result["message"], "type": mtype})
     handle_get_state()
 
 
@@ -2282,22 +1697,14 @@ def handle_quest_accept(data):
     char = get_character(session["user_id"])
     if not char: return
     qid = data.get("quest_id")
-    if not qid or qid not in QUESTS: return
-    quest = QUESTS[qid]
-    if char["level"] < quest["req_realm"]:
-        emit("game_msg", {"text": f"境界不足，需要{realm_name(quest['req_realm'])}。", "type": "error"})
+
+    result = accept_quest(char, qid)
+    if not result["success"]:
+        emit("game_msg", {"text": result.get("message", ""), "type": "error"})
         return
-    active = _get_active_quests(char)
-    if any(q["id"] == qid for q in active):
-        emit("game_msg", {"text": "你已经接了这个任务。", "type": "error"})
-        return
-    completed = _get_completed_quests(char)
-    if not quest["daily"] and qid in completed:
-        emit("game_msg", {"text": "这个任务已经完成过了。", "type": "error"})
-        return
-    active.append({"id": qid, "progress": {}})
-    update_character(session["user_id"], active_quests=json.dumps(active))
-    emit("game_msg", {"text": quest.get("accept_text", f"接受了任务：{quest['name']}"), "type": "info"})
+
+    update_character(session["user_id"], active_quests=json.dumps(result["updated_active_quests"]))
+    emit("game_msg", {"text": result["message"], "type": "info"})
     handle_get_state()
 
 
@@ -2307,86 +1714,38 @@ def handle_quest_complete(data):
     char = get_character(session["user_id"])
     if not char: return
     qid = data.get("quest_id")
-    if not qid or qid not in QUESTS: return
-    quest = QUESTS[qid]
-    active = _get_active_quests(char)
-    target = None
-    for q in active:
-        if q["id"] == qid:
-            target = q
-            break
-    if not target:
-        emit("game_msg", {"text": "你没有接这个任务。", "type": "error"})
+
+    result = complete_quest(char, qid)
+    if not result["success"]:
+        emit("game_msg", {"text": result.get("message", ""), "type": "error"})
         return
-    # 检查完成条件
-    for obj_type, obj_data in quest["objectives"].items():
-        if obj_type in ("kill", "collect"):
-            for mid, need in obj_data.items():
-                key = f"{obj_type}_{mid}"
-                if target["progress"].get(key, 0) < need:
-                    emit("game_msg", {"text": "任务目标尚未完成。", "type": "error"})
-                    return
-        elif obj_type == "visit":
-            for lid in obj_data:
-                if not target["progress"].get(f"visit_{lid}", 0):
-                    emit("game_msg", {"text": "任务目标尚未完成。", "type": "error"})
-                    return
-        elif obj_type == "kill_any":
-            if target["progress"].get("kill_any", 0) < obj_data:
-                emit("game_msg", {"text": "任务目标尚未完成。", "type": "error"})
-                return
-    # 发放奖励
-    rewards = quest["rewards"]
-    new_exp = char["exp"] + rewards.get("exp", 0)
-    new_gold = char["gold"] + rewards.get("gold", 0)
-    new_contrib = (char["sect_contrib"] or 0) + rewards.get("sect_contrib", 0)
-    gw = _get_goodwill(char)
-    for npc_id, gw_change in rewards.get("goodwill", {}).items():
-        gw[npc_id] = gw.get(npc_id, 0) + gw_change
-    if rewards.get("items"):
+
+    new_exp = char["exp"] + result["exp_gain"]
+    new_gold = char["gold"] + result["gold_gain"]
+    new_contrib = (char["sect_contrib"] or 0) + result["sect_contrib_gain"]
+
+    if result["item_rewards"]:
         inv = get_character_inventory(session["user_id"])
-        for iid, cnt in rewards["items"].items():
+        for iid, cnt in result["item_rewards"].items():
             inv[iid] = inv.get(iid, 0) + cnt
         set_character_inventory(session["user_id"], inv)
-    # 更新任务状态
-    active = [q for q in active if q["id"] != qid]
-    completed = _get_completed_quests(char)
-    if not quest["daily"]:
-        completed.append(qid)
+
     update_character(session["user_id"], exp=new_exp, gold=new_gold,
-                     sect_contrib=new_contrib, npc_goodwill=json.dumps(gw),
-                     active_quests=json.dumps(active), completed_quests=json.dumps(completed))
-    emit("game_msg", {"text": quest.get("complete_text", f"完成任务：{quest['name']}！"), "type": "heal"})
-    emit("game_msg", {"text": f"获得 {rewards.get('exp',0)} 修为、{rewards.get('gold',0)} 灵石" +
-         (f"、宗门贡献+{rewards.get('sect_contrib',0)}" if rewards.get("sect_contrib") else ""), "type": "shop"})
+                     sect_contrib=new_contrib,
+                     npc_goodwill=json.dumps(result["updated_goodwill"]),
+                     active_quests=json.dumps(result["updated_active_quests"]),
+                     completed_quests=json.dumps(result["updated_completed_quests"]))
+    emit("game_msg", {"text": result["message"], "type": "heal"})
+    emit("game_msg", {"text": result["reward_text"], "type": "shop"})
     handle_get_state()
 
 
 def _check_quest_progress(char, event_type, key, count=1):
     """检查并更新任务进度"""
     uid = char["user_id"] if "user_id" in char else session.get("user_id")
-    active = _get_active_quests(char)
-    changed = False
-    for q in active:
-        quest = QUESTS.get(q["id"])
-        if not quest: continue
-        for obj_type, obj_data in quest["objectives"].items():
-            if event_type == "kill" and obj_type == "kill" and key in obj_data:
-                pkey = f"kill_{key}"
-                q["progress"][pkey] = q["progress"].get(pkey, 0) + count
-                changed = True
-            elif event_type == "kill" and obj_type == "kill_any":
-                q["progress"]["kill_any"] = q["progress"].get("kill_any", 0) + count
-                changed = True
-            elif event_type == "collect" and obj_type == "collect" and key in obj_data:
-                pkey = f"collect_{key}"
-                q["progress"][pkey] = q["progress"].get(pkey, 0) + count
-                changed = True
-            elif event_type == "visit" and obj_type == "visit" and key in obj_data:
-                q["progress"][f"visit_{key}"] = 1
-                changed = True
+    changed, updated_quests = check_quest_progress(char, event_type, key, count)
     if changed and uid:
-        update_character(uid, active_quests=json.dumps(active))
+        update_character(uid, active_quests=json.dumps(updated_quests))
 
 
 # ═══════════════ 拍卖行系统 ═══════════════
@@ -2672,11 +2031,19 @@ def handle_auction_bid(data):
 
 # ═══════════════ 启动 ═══════════════
 
+# 日志配置
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+logger = logging.getLogger("xiantu")
+
 init_db()
-print("仙途服务器启动中...", flush=True)
+logger.info("仙途服务器启动中...")
 
 if __name__ == "__main__":
     socketio.start_background_task(check_afk_loop)
     socketio.start_background_task(_process_auction_ticks)
-    print("仙途服务器已就绪，端口 5000", flush=True)
-    socketio.run(app, host="0.0.0.0", port=5000, debug=False, allow_unsafe_werkzeug=True)
+    logger.info("仙途服务器已就绪，端口 %s", PORT)
+    socketio.run(app, host=HOST, port=PORT, debug=False, allow_unsafe_werkzeug=True)

@@ -104,21 +104,39 @@ systemctl enable --now xiantu
 
 ```
 xiantu/
-├── app.py                 # Flask + SocketIO 主程序（所有游戏逻辑）
-├── models.py              # SQLite 数据库模型
+├── app.py                 # Flask + SocketIO 主程序（路由 + 事件处理）
+├── config.py              # 配置管理（环境变量、密钥、端口）
+├── models.py              # SQLite 数据库模型（含版本化迁移）
 ├── game_data.py           # 游戏数据（境界、灵根、功法、经脉、物品、妖兽、地点、炼器）
-├── events.py              # 事件集（20个奇遇 + 16个突发事件，小说级文案）
-├── requirements.txt       # Python 依赖
-├── Dockerfile             # Docker 镜像
-├── docker-compose.yml     # Docker Compose（端口 8500）
-├── deploy.sh              # 一键部署脚本
-├── .gitignore
+├── events.py              # 事件数据（20个奇遇 + 16个突发事件，小说级文案）
+├── npc_data.py            # NPC 数据（7个NPC、19个任务、宗门系统）
+├── game/                  # 游戏逻辑层（纯业务逻辑，无Flask依赖）
+│   ├── utils.py           # 工具函数（属性计算、熟练度、修炼倍率）
+│   ├── combat.py          # 战斗系统
+│   ├── cultivation.py     # 修炼/突破/挂机系统
+│   ├── crafting.py        # 炼丹 + 炼器锻造
+│   ├── pet.py             # 灵宠系统
+│   ├── treasure.py        # 藏宝图 + 残卷合成
+│   ├── npc.py             # NPC 交互 + 任务系统
+│   ├── events.py          # 奇遇/突发事件处理
+│   └── auction.py         # 拍卖行系统
+├── tests/                 # 单元测试
+│   ├── test_utils.py
+│   ├── test_cultivation.py
+│   ├── test_pet.py
+│   └── test_npc.py
 ├── templates/
 │   ├── index.html         # 登录/注册/创建角色页
 │   └── game.html          # 游戏主界面
-└── static/
-    ├── css/style.css      # 暗绿修仙主题样式
-    └── js/game.js         # 前端交互逻辑
+├── static/
+│   ├── css/style.css      # 暗绿修仙主题样式
+│   └── js/game.js         # 前端交互逻辑
+├── requirements.txt       # Python 依赖
+├── Dockerfile             # Docker 镜像（含健康检查）
+├── docker-compose.yml     # Docker Compose（支持环境变量配置）
+├── backup.sh              # 数据库备份脚本
+├── .env.example           # 环境变量配置示例
+└── .gitignore
 ```
 
 ---
@@ -129,9 +147,10 @@ xiantu/
 |------|------|------|
 | 后端 | Flask + Flask-SocketIO | WebSocket 实时通信 |
 | 数据库 | SQLite (WAL 模式) | 零配置，轻量，适合小规模部署 |
-| 异步 | Eventlet | 协程式并发，内存占用低 |
+| 异步 | Threading | 线程式并发 |
 | 前端 | 原生 HTML/CSS/JS | 无框架依赖，加载快 |
 | 部署 | Docker / systemd | 一键部署，自动重启 |
+| 测试 | pytest | 单元测试覆盖核心逻辑 |
 
 ---
 
@@ -148,6 +167,24 @@ xiantu/
 ---
 
 ## 自定义修改
+
+### 环境变量配置
+
+复制 `.env.example` 为 `.env`，可配置以下选项：
+
+| 变量 | 说明 | 默认值 |
+|------|------|--------|
+| `XIANTU_SECRET_KEY` | 服务器密钥（不设置则自动生成并持久化） | 自动生成 |
+| `XIANTU_CORS` | CORS 允许的来源 | `*` |
+| `XIANTU_PORT` | 服务器端口 | `5000` |
+| `XIANTU_HOST` | 监听地址 | `0.0.0.0` |
+
+### 数据库备份
+
+```bash
+# 备份数据库（保存到 backups/ 目录，自动清理 30 天前的备份）
+./backup.sh
+```
 
 ### 修改端口
 

@@ -9,3 +9,6 @@ venv/
 .vscode/
 *.log
 .env
+backups/
+data/.secret_key
+.pytest_cache/
