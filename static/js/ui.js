@@ -166,7 +166,7 @@ function renderInventory(items) {
                 socket.emit("item_detail", { item: item.id });
             };
             if (!actionHtml) {
-                if (["consumable", "pet_egg"].includes(item.type)) {
+                if (["consumable", "pet_egg", "equip"].includes(item.type)) {
                     entry.onclick = () => socket.emit("use_item", { item: item.id });
                 }
             }
