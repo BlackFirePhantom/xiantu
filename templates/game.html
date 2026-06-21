@@ -21,7 +21,7 @@
         </span>
     </div>
 
-    <div class="game-layout">
+    <div class="game-layout active-tab-game">
         <!-- 左：角色面板 -->
         <div class="panel player-panel">
             <h3>修为信息</h3>
@@ -47,9 +47,18 @@
 
             <h3>法宝装备</h3>
             <div id="equip-info">
-                <div class="stat-line"><span>法宝</span><span id="equip-weapon" class="equip-slot">无</span></div>
-                <div class="stat-line"><span>护甲</span><span id="equip-armor" class="equip-slot">无</span></div>
-                <div class="stat-line"><span>饰品</span><span id="equip-accessory" class="equip-slot">无</span></div>
+                <div class="equip-slot-container" data-slot="weapon">
+                    <span class="equip-slot-label">法宝</span>
+                    <span id="equip-weapon" class="equip-slot empty">无</span>
+                </div>
+                <div class="equip-slot-container" data-slot="armor">
+                    <span class="equip-slot-label">护甲</span>
+                    <span id="equip-armor" class="equip-slot empty">无</span>
+                </div>
+                <div class="equip-slot-container" data-slot="accessory">
+                    <span class="equip-slot-label">饰品</span>
+                    <span id="equip-accessory" class="equip-slot empty">无</span>
+                </div>
             </div>
 
             <h3>储物袋 <button class="btn-tiny" onclick="toggleShop()">坊市</button></h3>
@@ -111,6 +120,13 @@
             <h3>宗门</h3>
             <div id="sect-info" class="sect-info-box"></div>
         </div>
+    </div>
+
+    <!-- 移动端底部导航栏 -->
+    <div class="mobile-tabs">
+        <button class="tab-btn active" onclick="switchMobileTab('game')">历练</button>
+        <button class="tab-btn" onclick="switchMobileTab('player')">洞府</button>
+        <button class="tab-btn" onclick="switchMobileTab('social')">传音</button>
     </div>
 
     <!-- 天骄榜 -->

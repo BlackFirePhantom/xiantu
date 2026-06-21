@@ -54,18 +54,43 @@ function renderState(s) {
     loc.connections.forEach((c, idx) => {
         const btn = document.createElement("button");
         btn.className = "conn-btn";
-        btn.textContent = `[${idx + 1}] 前往 ${c.name}`;
+        const isMobile = window.innerWidth <= 900;
+        const prefix = isMobile ? "" : `[${idx + 1}] `;
+        btn.textContent = `${prefix}前往 ${c.name}`;
         btn.onclick = () => socket.emit("move", { to: c.id });
         connDiv.appendChild(btn);
     });
 
     const eq = s.equipment;
-    document.getElementById("equip-weapon").textContent = eq.weapon ? eq.weapon.name : "无";
-    document.getElementById("equip-armor").textContent = eq.armor ? eq.armor.name : "无";
-    document.getElementById("equip-accessory").textContent = eq.accessory ? eq.accessory.name : "无";
-    document.getElementById("equip-weapon").onclick = eq.weapon ? () => socket.emit("unequip", { slot: "weapon" }) : null;
-    document.getElementById("equip-armor").onclick = eq.armor ? () => socket.emit("unequip", { slot: "armor" }) : null;
-    document.getElementById("equip-accessory").onclick = eq.accessory ? () => socket.emit("unequip", { slot: "accessory" }) : null;
+    const slots = ["weapon", "armor", "accessory"];
+    slots.forEach(slotType => {
+        const container = document.querySelector(`.equip-slot-container[data-slot="${slotType}"]`);
+        const slotEl = document.getElementById(`equip-${slotType}`);
+        const item = eq[slotType];
+        
+        if (item) {
+            slotEl.textContent = item.name;
+            slotEl.classList.remove("empty");
+            container.draggable = true;
+            container.ondragstart = (e) => {
+                e.dataTransfer.setData("text/plain", slotType);
+                e.dataTransfer.setData("action", "unequip");
+                window.currentDraggedAction = "unequip";
+                window.currentDraggedSlot = slotType;
+            };
+            container.ondragend = () => {
+                window.currentDraggedAction = null;
+                window.currentDraggedSlot = null;
+            };
+            container.onclick = () => socket.emit("unequip", { slot: slotType });
+        } else {
+            slotEl.textContent = "无";
+            slotEl.classList.add("empty");
+            container.draggable = false;
+            container.ondragstart = null;
+            container.onclick = null;
+        }
+    });
 
     renderInventory(s.inventory);
     document.getElementById("online-count").textContent = `道友在线: ${s.online_count}`;
@@ -169,6 +194,22 @@ function renderInventory(items) {
                 if (["consumable", "pet_egg", "equip"].includes(item.type)) {
                     entry.onclick = () => socket.emit("use_item", { item: item.id });
                 }
+            }
+            if (item.type === "equip") {
+                entry.draggable = true;
+                entry.ondragstart = (e) => {
+                    e.dataTransfer.setData("text/plain", item.id);
+                    e.dataTransfer.setData("slot", item.slot || "");
+                    e.dataTransfer.setData("action", "equip");
+                    window.currentDraggedAction = "equip";
+                    window.currentDraggedSlot = item.slot || "";
+                    entry.classList.add("dragging");
+                };
+                entry.ondragend = () => {
+                    window.currentDraggedAction = null;
+                    window.currentDraggedSlot = null;
+                    entry.classList.remove("dragging");
+                };
             }
             div.appendChild(entry);
         });
@@ -773,3 +814,78 @@ function addChat(name, text) {
 }
 
 function esc(str) { const d = document.createElement("div"); d.textContent = str; return d.innerHTML; }
+
+function initDragAndDrop() {
+    // 1. 设置装备槽为拖放目标（穿戴装备）
+    document.querySelectorAll(".equip-slot-container").forEach(container => {
+        const slotType = container.getAttribute("data-slot");
+        
+        container.addEventListener("dragover", (e) => {
+            if (window.currentDraggedAction === "equip" && window.currentDraggedSlot === slotType) {
+                e.preventDefault();
+                container.classList.add("drag-active");
+            }
+        });
+        
+        container.addEventListener("dragleave", () => {
+            container.classList.remove("drag-active");
+        });
+        
+        container.addEventListener("drop", (e) => {
+            e.preventDefault();
+            container.classList.remove("drag-active");
+            const itemId = e.dataTransfer.getData("text/plain");
+            const action = e.dataTransfer.getData("action");
+            const slot = e.dataTransfer.getData("slot");
+            if (action === "equip" && slot === slotType) {
+                socket.emit("use_item", { item: itemId });
+            }
+        });
+    });
+
+    // 2. 设置储物袋区域为拖放目标（卸下装备）
+    const invList = document.getElementById("inventory-list");
+    invList.addEventListener("dragover", (e) => {
+        if (window.currentDraggedAction === "unequip") {
+            e.preventDefault();
+            invList.classList.add("drag-active");
+        }
+    });
+
+    invList.addEventListener("dragleave", () => {
+        invList.classList.remove("drag-active");
+    });
+
+    invList.addEventListener("drop", (e) => {
+        e.preventDefault();
+        invList.classList.remove("drag-active");
+        const slot = e.dataTransfer.getData("text/plain");
+        const action = e.dataTransfer.getData("action");
+        if (action === "unequip") {
+            socket.emit("unequip", { slot: slot });
+        }
+    });
+}
+
+function switchMobileTab(tab) {
+    const layout = document.querySelector(".game-layout");
+    if (!layout) return;
+    
+    // 切换状态类名
+    layout.className = `game-layout active-tab-${tab}`;
+    
+    // 高亮底部按钮
+    document.querySelectorAll(".mobile-tabs .tab-btn").forEach(btn => {
+        btn.classList.remove("active");
+    });
+    
+    const tabsMap = {
+        "game": 0,
+        "player": 1,
+        "social": 2
+    };
+    const activeBtn = document.querySelectorAll(".mobile-tabs .tab-btn")[tabsMap[tab]];
+    if (activeBtn) {
+        activeBtn.classList.add("active");
+    }
+}

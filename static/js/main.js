@@ -103,4 +103,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // 快捷键提示
     addLog("快捷键：F=斩妖 M=打坐 B=突破 T=功法 J=经脉 L=天骄榜 1-9=移动 ESC=关闭", "system");
+    
+    // 初始化装备拖放交互
+    if (typeof initDragAndDrop === "function") {
+        initDragAndDrop();
+    }
 });

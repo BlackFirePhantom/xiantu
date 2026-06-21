@@ -275,15 +275,22 @@ def handle_get_state():
     for item_id, count in inv.items():
         item = lookup_item(item_id)
         if item:
-            inv_display.append({"id": item_id, "name": item["name"], "count": count, "desc": item.get("desc", ""), "type": item.get("type", "misc")})
+            inv_display.append({
+                "id": item_id,
+                "name": item["name"],
+                "count": count,
+                "desc": item.get("desc", ""),
+                "type": item.get("type", "misc"),
+                "slot": item.get("slot")
+            })
 
     equip_info = {"weapon": None, "armor": None, "accessory": None}
     w = lookup_item(char["weapon"]) if char["weapon"] else None
-    if w: equip_info["weapon"] = {"id": char["weapon"], "name": w["name"], "desc": w.get("desc", "")}
+    if w: equip_info["weapon"] = {"id": char["weapon"], "name": w["name"], "desc": w.get("desc", ""), "slot": w.get("slot", "weapon")}
     a = lookup_item(char["armor"]) if char["armor"] else None
-    if a: equip_info["armor"] = {"id": char["armor"], "name": a["name"], "desc": a.get("desc", "")}
+    if a: equip_info["armor"] = {"id": char["armor"], "name": a["name"], "desc": a.get("desc", ""), "slot": a.get("slot", "armor")}
     ac = lookup_item(char["accessory"]) if char["accessory"] else None
-    if ac: equip_info["accessory"] = {"id": char["accessory"], "name": ac["name"], "desc": ac.get("desc", "")}
+    if ac: equip_info["accessory"] = {"id": char["accessory"], "name": ac["name"], "desc": ac.get("desc", ""), "slot": ac.get("slot", "accessory")}
 
     connections_display = [{"id": c, "name": LOCATIONS[c]["name"]} for c in loc["connections"] if c in LOCATIONS]
 
