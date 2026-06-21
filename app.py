@@ -954,7 +954,6 @@ def handle_use_item(data):
     if inv.get(item_id, 0) <= 0:
         emit("game_msg", {"text": "你没有此物。", "type": "error"})
         return
-    item = ITEMS[item_id]
     if item["type"] == "material":
         emit("game_msg", {"text": "灵草是炼丹材料，不可直接使用。", "type": "info"})
         return
