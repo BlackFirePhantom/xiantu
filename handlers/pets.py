@@ -16,8 +16,7 @@ from game_data import (
     hatch_egg, get_pet_stats, get_pet_exp_needed, lookup_item
 )
 
-# 导入其它 Handler 提供的功能
-from handlers.base import do_get_state
+
 
 def get_pet_display_info(char):
     """获取角色所有灵宠的展示信息，供 base.py / get_state 调用"""
@@ -80,6 +79,7 @@ def do_hatch_egg(data):
         "text": f"你将灵力注入灵兽蛋，蛋壳裂开，一只【{species['name']}】（{rarity_names[species['rarity']]}）破壳而出！它用小脑袋蹭了蹭你的手心。",
         "type": "heal",
     })
+    from handlers.base import do_get_state
     do_get_state(session["user_id"])
 
 def register_pets_handlers(socketio):
@@ -138,6 +138,7 @@ def register_pets_handlers(socketio):
         emit("game_msg", {"text": f"你喂了【{species.get('name', '灵宠')}】一份{item['name']}，成长经验+{item['pet_exp']}。", "type": "heal"})
         for msg in level_up_msgs:
             emit("game_msg", {"text": msg, "type": "buff"})
+        from handlers.base import do_get_state
         do_get_state(session["user_id"])
 
     @socketio.on("activate_pet")
@@ -155,6 +156,7 @@ def register_pets_handlers(socketio):
         update_character(session["user_id"], active_pet=pet_id)
         species = PET_SPECIES.get(next(p["species_id"] for p in pets if p["id"] == pet_id), {})
         emit("game_msg", {"text": f"你将【{species.get('name', '灵宠')}】设为出战灵宠。", "type": "equip"})
+        from handlers.base import do_get_state
         do_get_state(session["user_id"])
 
     @socketio.on("deactivate_pet")
@@ -164,4 +166,5 @@ def register_pets_handlers(socketio):
         if not char: return
         update_character(session["user_id"], active_pet=None)
         emit("game_msg", {"text": "你收回了出战灵宠。", "type": "equip"})
+        from handlers.base import do_get_state
         do_get_state(session["user_id"])

@@ -12,7 +12,8 @@ from game_state import (
     get_character_inventory_cached as get_character_inventory,
     set_character_inventory_cached as set_character_inventory
 )
-from game_data import ITEMS, AUCTION_POOL, AUCTION_NPC
+from game_data import ITEMS
+from game.auction import AUCTION_POOL, AUCTION_NPC
 
 # 导入其它 Handler 提供的功能
 from handlers.base import do_get_state

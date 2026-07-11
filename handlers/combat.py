@@ -14,10 +14,10 @@ from game_state import (
 from game_data import (
     LOCATIONS, SPIRIT_ROOTS, TECHNIQUES, ELEMENT_COUNTER, SURPRISE_EVENTS,
     DROP_TABLE, PET_EGG_MONSTER_DROPS, MAP_MONSTER_DROPS, LOCATION_UNIQUE_DROPS,
-    ITEMS, realm_name, spawn_monster, get_exp_needed
+    ITEMS, realm_name, spawn_monster
 )
 from game.combat import fmt_attack, fmt_monster_attack
-from game.utils import get_full_stats, gain_proficiency
+from game.utils import get_full_stats, gain_proficiency, get_exp_needed
 
 # 导入其它 Handler 提供的功能（单向依赖）
 from handlers.npc import _check_quest_progress

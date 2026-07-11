@@ -15,9 +15,9 @@ from game_state import (
 from game_data import (
     LOCATIONS, SPIRIT_ROOTS, TECHNIQUES, MERIDIANS, ITEMS, ALIGNMENT_CONFLICTS,
     MAX_LEVEL, EXP_PER_LEVEL, BREAKTHROUGH_CHANCE, TECHNIQUE_MAX_PROFICIENCY,
-    realm_name, get_exp_needed
+    realm_name
 )
-from game.utils import get_full_stats, gain_proficiency, calc_level_stats
+from game.utils import get_full_stats, gain_proficiency, calc_level_stats, get_exp_needed
 
 # 导入其它 Handler 的功能
 from handlers.base import do_get_state
