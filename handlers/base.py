@@ -52,6 +52,20 @@ def register_base_handlers(socketio):
         game_state.touch_activity(session.get("username", ""))
         do_get_state(session["user_id"])
 
+    @socketio.on("chat")
+    def handle_chat(data):
+        if "username" not in session: return
+        game_state.touch_activity(session.get("username", ""))
+        text = data.get("text", "").strip()
+        if not text or len(text) > 200: return
+        emit("chat_msg", {"from": session["username"], "text": text}, broadcast=True)
+
+    @socketio.on("get_leaderboard")
+    def handle_leaderboard():
+        rows = get_leaderboard()
+        lb = [{"name": r["name"], "level": r["level"], "realm": realm_name(r["level"]), "exp": r["exp"], "kills": r["kills"]} for r in rows]
+        emit("leaderboard", {"data": lb})
+
 def do_get_state(user_id):
     char = get_character(user_id)
     if not char:
@@ -147,17 +161,3 @@ def do_get_state(user_id):
         "online_count": len(game_state.online_users),
         "is_afk": session.get("username", "") in game_state.afk_players,
     })
-
-    @socketio.on("chat")
-    def handle_chat(data):
-        if "username" not in session: return
-        game_state.touch_activity(session.get("username", ""))
-        text = data.get("text", "").strip()
-        if not text or len(text) > 200: return
-        emit("chat_msg", {"from": session["username"], "text": text}, broadcast=True)
-
-    @socketio.on("get_leaderboard")
-    def handle_leaderboard():
-        rows = get_leaderboard()
-        lb = [{"name": r["name"], "level": r["level"], "realm": realm_name(r["level"]), "exp": r["exp"], "kills": r["kills"]} for r in rows]
-        emit("leaderboard", {"data": lb})
