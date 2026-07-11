@@ -4,17 +4,9 @@ import random
 from datetime import datetime
 
 from game_data import (
-    ITEMS, LOCATIONS, BREAKTHROUGH_CHANCE, MAX_LEVEL,
     IDLE_EXP_PER_SEC, IDLE_MAX_HOURS,
 )
-from game.utils import get_full_stats, get_exp_needed, get_cultivation_mult, calc_level_stats
-
-
-# AFK 挂机材料掉落池
-AFK_DROP_POOL = ["lingcao", "yaogu", "yaopimo", "hantie_kuang"]
-
-# AFK 挂机材料掉落概率
-AFK_DROP_CHANCE = 0.3
+from game.utils import get_exp_needed, get_cultivation_mult, calc_level_stats
 
 
 def process_offline_cultivation(char):
@@ -46,65 +38,6 @@ def process_offline_cultivation(char):
     if get_exp_needed(char["level"]) == "-":
         gain = 0
     return max(0, gain), int(elapsed)
-
-
-def process_afk_tick(char, loc, now, afk_start_time, afk_max_hours, afk_interval, idle_exp_per_sec):
-    """处理一次在线挂机 tick。
-
-    计算挂机时长（钳制到最大值），发放修为经验，并在非安全区域概率
-    掉落材料。返回的字典包含经验收益、掉落列表和格式化的持续时间。
-
-    Args:
-        char: 角色数据字典。
-        loc: 当前地点数据字典（需包含 "safe" 字段）。
-        now: 当前时间戳（time.time()）。
-        afk_start_time: 挂机开始时间戳。
-        afk_max_hours: 挂机最大时长（小时）。
-        afk_interval: 挂机结算间隔（秒）。
-        idle_exp_per_sec: 每秒基础修为收益。
-
-    Returns:
-        dict: {
-            "exp_gain": int,           # 本次 tick 获得的修为
-            "drops": list[str],        # 掉落的物品 id 列表
-            "duration": int,           # 挂机总时长（秒）
-            "max_hp_regen": bool,      # 安全区是否触发满血回复
-        }
-    """
-    afk_duration = now - afk_start_time
-    max_duration = afk_max_hours * 3600
-
-    if afk_duration > max_duration:
-        afk_duration = max_duration
-
-    if afk_duration < afk_interval:
-        return {"exp_gain": 0, "drops": [], "duration": int(afk_duration), "max_hp_regen": False}
-
-    mult = get_cultivation_mult(char)
-    exp_gain = int(idle_exp_per_sec * afk_interval * mult)
-
-    # 挂机地点有怪物时，概率掉落材料
-    drops = []
-    if not loc["safe"] and random.random() < AFK_DROP_CHANCE:
-        drops.append(random.choice(AFK_DROP_POOL))
-
-    # 已满级不获得修为
-    if get_exp_needed(char["level"]) == "-":
-        exp_gain = 0
-
-    # 安全区域自动回满血
-    max_hp_regen = False
-    if loc["safe"]:
-        stats = get_full_stats(char)
-        if char["hp"] < stats["max_hp"]:
-            max_hp_regen = True
-
-    return {
-        "exp_gain": exp_gain,
-        "drops": drops,
-        "duration": int(afk_duration),
-        "max_hp_regen": max_hp_regen,
-    }
 
 
 def attempt_breakthrough(char, exp_needed, breakthrough_chance):

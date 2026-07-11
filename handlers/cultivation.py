@@ -17,7 +17,8 @@ from game_data import (
     MAX_LEVEL, EXP_PER_LEVEL, BREAKTHROUGH_CHANCE, TECHNIQUE_MAX_PROFICIENCY,
     realm_name
 )
-from game.utils import get_full_stats, gain_proficiency, calc_level_stats, get_exp_needed
+from game.utils import get_full_stats, gain_proficiency, get_exp_needed
+from game.cultivation import attempt_breakthrough
 
 # 导入其它 Handler 的功能
 from handlers.base import do_get_state
@@ -82,16 +83,17 @@ def register_cultivation_handlers(socketio):
         if pill_msg:
             emit("game_msg", {"text": pill_msg, "type": "buff"})
 
-        if random.random() < chance:
-            new_lv = cur_lv + 1
-            new_stats = calc_level_stats(new_lv)
+        result = attempt_breakthrough(char, needed, chance)
+        if result["success"]:
+            new_lv = result["new_level"]
+            new_stats = result["new_stats"]
             update_character(session["user_id"], level=new_lv, max_hp=new_stats["max_hp"], atk=new_stats["atk"], def_stat=new_stats["def_stat"], hp=new_stats["max_hp"])
             new_realm = realm_name(new_lv)
             logger.info("突破成功：%s -> %s (Lv.%d)", session.get("username"), new_realm, new_lv)
-            emit("game_msg", {"text": f"体内灵力暴涌，丹田剧烈震动——突破成功！你已迈入{new_realm}！", "type": "heal"})
+            emit("game_msg", {"text": f"体内灵力暴涌，丹田剧烈震动--突破成功！你已迈入{new_realm}！", "type": "heal"})
             emit("system_msg", {"text": f"天道感应：{session.get('username')} 突破至 {new_realm}，引发天地异象！"}, broadcast=True, namespace="/")
         else:
-            hp_loss = char["hp"] // 3
+            hp_loss = result["hp_loss"]
             fail_msgs = [
                 f"灵力逆行，经脉受损……突破失败！{needed} 修为化为乌有。",
                 f"丹田中灵力暴走，冲击境界失败，{needed} 修为付诸东流！",

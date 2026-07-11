@@ -21,7 +21,7 @@
 | 数据库 | SQLite WAL 模式 | 零配置，文件位于 `data/game.db` |
 | 前端 | 原生 HTML/CSS/JS | 无框架，Socket.IO 客户端本地加载 |
 | 部署 | Docker + docker-compose | 端口 8500→5000，含健康检查 |
-| 测试 | pytest | 36 个单元测试覆盖核心逻辑 |
+| 测试 | pytest | 60 个单元测试覆盖核心逻辑 |
 | CI | GitHub Actions | 语法检查 + pytest + Docker 构建 |
 
 ---
@@ -30,28 +30,42 @@
 
 ```
 xiantu/
-├── app.py                 # Flask + SocketIO 主程序（路由 + 事件处理，约2050行）
+├── app.py                 # Flask + SocketIO 主程序（HTTP路由 + 启动引导，约197行）
 ├── config.py              # 配置管理（环境变量、密钥持久化、端口）
 ├── models.py              # SQLite 数据库层（CRUD + 版本化迁移）
+├── game_state.py          # 共享内存状态（在线用户/Write-Back缓存/AFK惰性结算）
 ├── game_data.py           # 游戏数据常量（境界/灵根/功法/经脉/物品/妖兽/地点，约740行）
 ├── events.py              # 事件数据（20个奇遇 + 16个突发事件）
 ├── npc_data.py            # NPC 数据（7个NPC、19个任务、宗门系统）
 ├── game/                  # 游戏逻辑层（纯业务逻辑，无Flask/SocketIO依赖）
 │   ├── utils.py           # 工具函数（属性计算、熟练度、修炼倍率）
-│   ├── combat.py          # 战斗系统（伤害计算、掉落、五行相克）
-│   ├── cultivation.py     # 修炼/突破/挂机系统
+│   ├── combat.py          # 战斗文案（攻击描述模板）
+│   ├── cultivation.py     # 修炼/突破/离线挂机系统
 │   ├── crafting.py        # 炼丹 + 炼器锻造
 │   ├── pet.py             # 灵宠系统（孵化、喂养、出战）
 │   ├── treasure.py        # 藏宝图 + 残卷合成
 │   ├── npc.py             # NPC交互 + 好感度 + 任务系统
 │   ├── events.py          # 奇遇/突发事件处理
 │   └── auction.py         # 拍卖行系统
-├── handlers/              # SocketIO 事件处理层（目前仅 __init__.py，待进一步拆分）
+├── handlers/              # SocketIO 事件处理层（9个子模块）
+│   ├── __init__.py        # init_handlers() 注册所有子处理器
+│   ├── base.py            # 连接/断开/get_state/chat/排行榜
+│   ├── gameplay.py        # 移动/奇遇选择
+│   ├── combat.py          # 斩妖战斗
+│   ├── cultivation.py     # 打坐/突破/功法/经脉
+│   ├── items.py           # 道具使用/卸装/炼丹/炼器/坊市
+│   ├── pets.py            # 灵宠孵化/喂养/出战
+│   ├── adventure.py       # 藏宝图/残卷合成
+│   ├── npc.py             # NPC交互/赠礼/任务
+│   └── auction.py         # 拍卖行竞价
 ├── tests/                 # 单元测试
-│   ├── test_utils.py      # 工具函数测试（15个用例）
-│   ├── test_cultivation.py# 修炼系统测试（7个用例）
-│   ├── test_pet.py        # 灵宠系统测试（6个用例）
-│   └── test_npc.py        # NPC系统测试（8个用例）
+│   ├── conftest.py        # 共享 fixtures（make_char/make_inv）
+│   ├── test_utils.py      # 工具函数测试
+│   ├── test_cultivation.py# 修炼系统测试
+│   ├── test_pet.py        # 灵宠系统测试
+│   ├── test_npc.py        # NPC系统测试
+│   ├── test_combat.py     # 战斗文案测试
+│   └── test_crafting.py   # 炼丹/锻造测试
 ├── templates/
 │   ├── index.html         # 登录/注册/创建角色页
 │   └── game.html          # 游戏主界面（三栏布局）
@@ -133,10 +147,11 @@ python -m pytest tests/ -v
 ## 架构设计原则
 
 1. **game/ 层纯业务逻辑**：不依赖 Flask/SocketIO/session/emit，方便单元测试
-2. **app.py 为事件处理层**：接收 socket 事件，调用 game/ 函数，emit 结果
-3. **数据与逻辑分离**：`game_data.py`/`events.py`/`npc_data.py` 纯数据，`game/` 纯逻辑
-4. **向后兼容**：密码哈希升级时自动迁移旧 SHA-256 密码
-5. **数据库迁移版本化**：`schema_version` 表记录已执行的迁移版本
+2. **handlers/ 为事件处理层**：接收 socket 事件，调用 game/ 函数，emit 结果
+3. **app.py 为 HTTP 路由层**：用户认证、页面渲染、启动引导与后台任务
+4. **数据与逻辑分离**：`game_data.py`/`events.py`/`npc_data.py` 纯数据，`game/` 纯逻辑
+5. **向后兼容**：密码哈希升级时自动迁移旧 SHA-256 密码
+6. **数据库迁移版本化**：`schema_version` 表记录已执行的迁移版本
 
 ---
 

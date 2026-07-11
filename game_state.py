@@ -29,7 +29,7 @@ socketio = None
 # 写回（Write-Back）缓存核心设计
 character_cache = {}   # user_id -> character dict (可写)
 dirty_users = set()    # 存有脏数据的 user_id 集合
-cache_lock = threading.Lock()
+cache_lock = threading.RLock()
 
 def get_cached_character(user_id):
     """从内存缓存获取角色数据。若未命中，则从 SQLite 加载并转为 dict。"""
@@ -60,6 +60,40 @@ def update_cached_character(user_id, **kwargs):
         
         char.update(kwargs)
         dirty_users.add(user_id)
+
+def modify_cached_character(user_id, **field_deltas):
+    """原子地增减角色字段值（解决 read-modify-write 竞态）。
+
+    典型用法::
+
+        # 旧写法（有竞态）：char = get_cached_character(uid); update_cached_character(uid, exp=char["exp"]+50)
+        # 新写法（原子）：  modify_cached_character(uid, exp=50)
+
+    参数:
+        user_id: 用户 ID
+        **field_deltas: {字段名: 增量}，正数增加，负数减少
+
+    返回:
+        {字段名: 更新后的值} 字典，角色不存在时返回 None
+    """
+    if not field_deltas:
+        return None
+    with cache_lock:
+        char = character_cache.get(user_id)
+        if not char:
+            row = models.get_character(user_id)
+            if row:
+                char = dict(row)
+                character_cache[user_id] = char
+            else:
+                return None
+        result = {}
+        for field, delta in field_deltas.items():
+            new_val = char.get(field, 0) + delta
+            char[field] = new_val
+            result[field] = new_val
+        dirty_users.add(user_id)
+        return result
 
 def get_character_inventory_cached(user_id):
     """获取角色的背包（优先命中缓存，保持 100% 外界兼容性）"""
