@@ -61,69 +61,14 @@ socketio = SocketIO(app, async_mode="threading", cors_allowed_origins=CORS_ALLOW
 
 from game_state import online_users, last_activity, afk_players, touch_activity
 
-def check_afk_loop():
-    """后台循环：检测挂机状态并发放挂机奖励"""
+def cache_flush_loop():
+    """定时后台任务：每 30 秒自动同步内存缓存中发生修改的脏数据至 SQLite 数据库"""
     while True:
-        socketio.sleep(AFK_INTERVAL)
-        now = time.time()
-        for username, sid in list(online_users.items()):
-            if username not in last_activity:
-                continue
-            idle_time = now - last_activity[username]
-
-            # 进入挂机
-            if idle_time >= AFK_TIMEOUT and username not in afk_players:
-                afk_players[username] = now
-                socketio.emit("afk_status", {"afk": True, "msg": "你已进入挂机修炼状态（10分钟无操作自动触发）"}, room=sid)
-
-            # 挂机中发放奖励
-            if username in afk_players:
-                user = get_user(username)
-                if not user:
-                    continue
-                char = get_character(user["id"])
-                if not char:
-                    continue
-
-                loc = LOCATIONS.get(char["location"], LOCATIONS["qingyun_town"])
-                afk_duration = now - afk_players[username]
-                max_duration = AFK_MAX_HOURS * 3600
-
-                if afk_duration > max_duration:
-                    afk_players[username] = now - max_duration
-                    afk_duration = max_duration
-
-                if afk_duration < AFK_INTERVAL:
-                    continue
-
-                mult = get_cultivation_mult(char)
-                exp_gain = int(IDLE_EXP_PER_SEC * AFK_INTERVAL * mult)
-
-                # 挂机地点有怪物时，概率掉落材料
-                drops = []
-                if not loc["safe"] and random.random() < 0.3:
-                    mat_pool = ["lingcao", "yaogu", "yaopimo", "hantie_kuang"]
-                    drops.append(random.choice(mat_pool))
-
-                inv = get_character_inventory(user["id"])
-                for item_id in drops:
-                    inv[item_id] = inv.get(item_id, 0) + 1
-                set_character_inventory(user["id"], inv)
-
-                if get_exp_needed(char["level"]) != "-":
-                    update_character(user["id"], exp=char["exp"] + exp_gain)
-
-                # 挂机中自动回血（安全区域）
-                if loc["safe"]:
-                    stats = get_full_stats(char)
-                    if char["hp"] < stats["max_hp"]:
-                        update_character(user["id"], hp=stats["max_hp"])
-
-                emit("afk_tick", {
-                    "exp": exp_gain,
-                    "drops": [ITEMS[d]["name"] for d in drops],
-                    "duration": format_duration(int(afk_duration)),
-                }, room=sid)
+        socketio.sleep(30)
+        try:
+            game_state.flush_all_cache()
+        except Exception as e:
+            logger.error("定时缓存同步数据库出错：%s", str(e))
 
 def hash_password(password):
     """使用 werkzeug 生成安全密码哈希（带盐）"""
@@ -246,7 +191,7 @@ init_db()
 logger.info("仙途服务器启动中...")
 
 if __name__ == "__main__":
-    socketio.start_background_task(check_afk_loop)
+    socketio.start_background_task(cache_flush_loop)
     socketio.start_background_task(_process_auction_ticks)
     logger.info("仙途服务器已就绪，端口 %s", PORT)
     socketio.run(app, host=HOST, port=PORT, debug=False, allow_unsafe_werkzeug=True)

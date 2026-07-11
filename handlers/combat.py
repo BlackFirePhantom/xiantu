@@ -5,8 +5,12 @@ import random
 from flask import session
 from flask_socketio import emit
 
-import game_state
-from models import get_character, update_character, get_character_inventory, set_character_inventory
+from game_state import (
+    get_cached_character as get_character,
+    update_cached_character as update_character,
+    get_character_inventory_cached as get_character_inventory,
+    set_character_inventory_cached as set_character_inventory
+)
 from game_data import (
     LOCATIONS, SPIRIT_ROOTS, TECHNIQUES, ELEMENT_COUNTER, SURPRISE_EVENTS,
     DROP_TABLE, PET_EGG_MONSTER_DROPS, MAP_MONSTER_DROPS, LOCATION_UNIQUE_DROPS,

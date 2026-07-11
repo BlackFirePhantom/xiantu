@@ -5,8 +5,12 @@ import uuid
 from flask import session
 from flask_socketio import emit
 
-import game_state
-from models import get_character, update_character, get_character_inventory, set_character_inventory
+from game_state import (
+    get_cached_character as get_character,
+    update_cached_character as update_character,
+    get_character_inventory_cached as get_character_inventory,
+    set_character_inventory_cached as set_character_inventory
+)
 from game_data import (
     PET_SPECIES, PET_MAX_LEVEL,
     hatch_egg, get_pet_stats, get_pet_exp_needed, lookup_item

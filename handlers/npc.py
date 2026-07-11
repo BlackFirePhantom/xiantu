@@ -4,7 +4,12 @@ import json
 from flask import session
 from flask_socketio import emit
 
-from models import get_character, update_character, get_character_inventory, set_character_inventory
+from game_state import (
+    get_cached_character as get_character,
+    update_cached_character as update_character,
+    get_character_inventory_cached as get_character_inventory,
+    set_character_inventory_cached as set_character_inventory
+)
 from game.npc import (
     interact_with_npc, give_npc_gift, accept_quest, complete_quest, check_quest_progress
 )

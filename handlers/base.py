@@ -6,8 +6,11 @@ from flask import session, request
 from flask_socketio import emit
 
 import game_state
-from models import (
-    get_character, update_character, get_character_inventory, get_leaderboard
+from models import get_leaderboard
+from game_state import (
+    get_cached_character as get_character,
+    update_cached_character as update_character,
+    get_character_inventory_cached as get_character_inventory
 )
 from game_data import (
     LOCATIONS, SPIRIT_ROOTS, TECHNIQUES, MERIDIANS,
@@ -34,11 +37,14 @@ def register_base_handlers(socketio):
     @socketio.on("disconnect")
     def handle_disconnect(reason=None):
         username = session.get("username")
+        user_id = session.get("user_id")
         if username:
             game_state.online_users.pop(username, None)
             game_state.afk_players.pop(username, None)
             game_state.last_activity.pop(username, None)
             emit("system_msg", {"text": f"{username} 离开了修仙界"}, broadcast=True, namespace="/")
+        if user_id:
+            game_state.save_cached_character(user_id)
 
     @socketio.on("get_state")
     def handle_get_state():
