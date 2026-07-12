@@ -6,6 +6,7 @@ import logging
 from flask import session
 from flask_socketio import emit
 
+import game_state
 from game_state import (
     get_cached_character as get_character,
     update_cached_character as update_character,
