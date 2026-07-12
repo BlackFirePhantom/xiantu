@@ -104,33 +104,54 @@ systemctl enable --now xiantu
 
 ```
 xiantu/
-├── app.py                 # Flask + SocketIO 主程序（路由 + 事件处理）
+├── app.py                 # Flask + SocketIO 主程序（HTTP路由 + 启动引导）
 ├── config.py              # 配置管理（环境变量、密钥、端口）
 ├── models.py              # SQLite 数据库模型（含版本化迁移）
+├── game_state.py          # 共享内存状态（在线用户/Write-Back缓存/AFK结算）
 ├── game_data.py           # 游戏数据（境界、灵根、功法、经脉、物品、妖兽、地点、炼器）
 ├── events.py              # 事件数据（20个奇遇 + 16个突发事件，小说级文案）
 ├── npc_data.py            # NPC 数据（7个NPC、19个任务、宗门系统）
 ├── game/                  # 游戏逻辑层（纯业务逻辑，无Flask依赖）
 │   ├── utils.py           # 工具函数（属性计算、熟练度、修炼倍率）
-│   ├── combat.py          # 战斗系统
-│   ├── cultivation.py     # 修炼/突破/挂机系统
+│   ├── combat.py          # 战斗文案（攻击描述模板）
+│   ├── cultivation.py     # 修炼/突破/离线挂机系统
 │   ├── crafting.py        # 炼丹 + 炼器锻造
 │   ├── pet.py             # 灵宠系统
 │   ├── treasure.py        # 藏宝图 + 残卷合成
 │   ├── npc.py             # NPC 交互 + 任务系统
 │   ├── events.py          # 奇遇/突发事件处理
 │   └── auction.py         # 拍卖行系统
-├── tests/                 # 单元测试
-│   ├── test_utils.py
-│   ├── test_cultivation.py
-│   ├── test_pet.py
-│   └── test_npc.py
+├── handlers/              # SocketIO 事件处理层（9个子模块）
+│   ├── base.py            # 连接/状态/聊天/排行榜
+│   ├── gameplay.py        # 移动/奇遇
+│   ├── combat.py          # 斩妖战斗
+│   ├── cultivation.py     # 修炼/突破/功法/经脉
+│   ├── items.py           # 道具/炼丹/炼器/坊市
+│   ├── pets.py            # 灵宠
+│   ├── adventure.py       # 藏宝图/残卷
+│   ├── npc.py             # NPC交互/任务
+│   └── auction.py         # 拍卖行
+├── tests/                 # 单元测试（60个用例）
+│   ├── conftest.py        # 共享 fixtures
+│   ├── test_utils.py      # 工具函数测试
+│   ├── test_cultivation.py# 修炼系统测试
+│   ├── test_pet.py        # 灵宠系统测试
+│   ├── test_npc.py        # NPC系统测试
+│   ├── test_combat.py     # 战斗文案测试
+│   └── test_crafting.py   # 炼丹/锻造测试
 ├── templates/
 │   ├── index.html         # 登录/注册/创建角色页
-│   └── game.html          # 游戏主界面
+│   └── game.html          # 游戏主界面（三栏布局 + 模态框）
 ├── static/
-│   ├── css/style.css      # 暗绿修仙主题样式
-│   └── js/game.js         # 前端交互逻辑
+│   ├── css/style.css      # 暗绿修仙主题样式（含移动端响应式 + 动画）
+│   ├── js/
+│   │   ├── socket.io.min.js  # Socket.IO 客户端
+│   │   ├── socket.js         # 连接与事件绑定
+│   │   ├── ui.js             # 渲染函数与面板控制
+│   │   └── main.js           # 入口、快捷键、PWA
+│   ├── manifest.json      # PWA 配置
+│   ├── sw.js              # Service Worker（静态资源缓存）
+│   └── icon.svg           # SVG 图标
 ├── requirements.txt       # Python 依赖
 ├── Dockerfile             # Docker 镜像（含健康检查）
 ├── docker-compose.yml     # Docker Compose（支持环境变量配置）

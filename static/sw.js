@@ -1,12 +1,14 @@
 /* 仙途 Service Worker — 缓存静态资源 */
 
-const CACHE_NAME = "xiantu-v1";
+const CACHE_NAME = "xiantu-v2";
 const STATIC_ASSETS = [
     "/static/css/style.css",
     "/static/js/socket.io.min.js",
     "/static/js/socket.js",
     "/static/js/ui.js",
     "/static/js/main.js",
+    "/static/manifest.json",
+    "/static/icon.svg",
 ];
 
 self.addEventListener("install", (event) => {

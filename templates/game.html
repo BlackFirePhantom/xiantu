@@ -130,7 +130,7 @@
     </div>
 
     <!-- 天骄榜 -->
-    <div id="lb-modal" class="modal" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
+    <div id="lb-modal" class="modal" role="dialog" aria-modal="true" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
         <div class="modal-content">
             <span class="modal-close" onclick="this.closest('.modal').style.display='none'">&times;</span>
             <h3>天骄榜</h3>
@@ -140,7 +140,7 @@
     </div>
 
     <!-- 功法面板 -->
-    <div id="tech-modal" class="modal" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
+    <div id="tech-modal" class="modal" role="dialog" aria-modal="true" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
         <div class="modal-content">
             <span class="modal-close" onclick="this.closest('.modal').style.display='none'">&times;</span>
             <h3>功法参悟</h3>
@@ -153,7 +153,7 @@
     </div>
 
     <!-- 经脉面板 -->
-    <div id="mer-modal" class="modal" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
+    <div id="mer-modal" class="modal" role="dialog" aria-modal="true" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
         <div class="modal-content">
             <span class="modal-close" onclick="this.closest('.modal').style.display='none'">&times;</span>
             <h3>经脉修炼</h3>
@@ -163,7 +163,7 @@
     </div>
 
     <!-- 炼丹面板 -->
-    <div id="alchemy-modal" class="modal" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
+    <div id="alchemy-modal" class="modal" role="dialog" aria-modal="true" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
         <div class="modal-content">
             <span class="modal-close" onclick="this.closest('.modal').style.display='none'">&times;</span>
             <h3>炼丹</h3>
@@ -173,7 +173,7 @@
     </div>
 
     <!-- 炼器面板 -->
-    <div id="forge-modal" class="modal" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
+    <div id="forge-modal" class="modal" role="dialog" aria-modal="true" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
         <div class="modal-content" style="width:560px;">
             <span class="modal-close" onclick="this.closest('.modal').style.display='none'">&times;</span>
             <h3>炼器阁</h3>
@@ -184,7 +184,7 @@
     </div>
 
     <!-- 灵宠面板 -->
-    <div id="pet-modal" class="modal" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
+    <div id="pet-modal" class="modal" role="dialog" aria-modal="true" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
         <div class="modal-content" style="width:520px;">
             <span class="modal-close" onclick="this.closest('.modal').style.display='none'">&times;</span>
             <h3>灵宠</h3>
@@ -195,7 +195,7 @@
     </div>
 
     <!-- NPC交互面板 -->
-    <div id="npc-modal" class="modal" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
+    <div id="npc-modal" class="modal" role="dialog" aria-modal="true" aria-label="NPC交互" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
         <div class="modal-content" style="width:520px;">
             <span class="modal-close" onclick="this.closest('.modal').style.display='none'">&times;</span>
             <div id="npc-detail-header"></div>
@@ -205,7 +205,7 @@
     </div>
 
     <!-- 拍卖行面板 -->
-    <div id="auction-modal" class="modal" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
+    <div id="auction-modal" class="modal" role="dialog" aria-modal="true" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
         <div class="modal-content" style="width:600px;">
             <span class="modal-close" onclick="this.closest('.modal').style.display='none'">&times;</span>
             <h3>天机拍卖行</h3>
@@ -217,7 +217,7 @@
     </div>
 
     <!-- 物品详情面板 -->
-    <div id="item-detail-modal" class="modal" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
+    <div id="item-detail-modal" class="modal" role="dialog" aria-modal="true" aria-label="物品详情" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
         <div class="modal-content" style="width:400px;">
             <span class="modal-close" onclick="this.closest('.modal').style.display='none'">&times;</span>
             <div id="item-detail-body"></div>
@@ -225,9 +225,9 @@
     </div>
 
     <script src="{{ url_for('static', filename='js/socket.io.min.js') }}?v=2"></script>
-    <script src="{{ url_for('static', filename='js/socket.js') }}?v=1"></script>
-    <script src="{{ url_for('static', filename='js/ui.js') }}?v=1"></script>
-    <script src="{{ url_for('static', filename='js/main.js') }}?v=1"></script>
+    <script src="{{ url_for('static', filename='js/socket.js') }}?v=2"></script>
+    <script src="{{ url_for('static', filename='js/ui.js') }}?v=2"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}?v=2"></script>
     <script>
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('{{ url_for("static", filename="sw.js") }}').catch(() => {});

@@ -35,7 +35,7 @@ document.addEventListener("keydown", (e) => {
     if (currentForture) {
         const idx = parseInt(e.key) - 1;
         if (idx >= 0 && idx < currentForture.choices.length) {
-            socket.emit("fortune_choice", { event_id: currentForture.event_id, choice: idx });
+            socket.emit("fortune_choice", { event_id: currentForture.event_id, choice: currentForture.choices[idx].index });
             document.getElementById("fortune-popup").style.display = "none";
             currentForture = null;
             e.preventDefault();

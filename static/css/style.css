@@ -55,6 +55,21 @@ a:hover {
     text-decoration: underline; 
 }
 
+/* 键盘焦点可见样式（仅键盘导航时显示，不影响鼠标点击外观） */
+:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+}
+.btn:focus-visible {
+    outline: 2px solid var(--accent-gold);
+    outline-offset: 2px;
+}
+a:focus-visible {
+    outline: 2px solid var(--accent-sky);
+    outline-offset: 2px;
+    border-radius: 2px;
+}
+
 /* ===== 登录/注册页 ===== */
 .container { 
     display: flex; 
@@ -121,6 +136,10 @@ a:hover {
     outline: none; 
     box-shadow: 0 0 10px var(--primary-glow); 
     background: rgba(10, 14, 20, 0.95);
+}
+.form-group input:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
 }
 
 .alert { 
@@ -738,6 +757,10 @@ a:hover {
 .chat-input-wrap input:focus { 
     border-color: var(--primary-color); 
     outline: none; 
+}
+.chat-input-wrap input:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
 }
 
 /* ===== 挂机指示器 ===== */
