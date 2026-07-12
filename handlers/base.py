@@ -1,7 +1,7 @@
 """基础连接与通用状态的 Socket 事件处理器。"""
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from flask import session, request
 from flask_socketio import emit
 
@@ -76,11 +76,11 @@ def do_get_state(user_id):
     gain, elapsed = process_offline_cultivation(char)
     if gain > 0:
         new_exp = char["exp"] + gain
-        update_character(user_id, exp=new_exp, last_active=datetime.utcnow().isoformat())
+        update_character(user_id, exp=new_exp, last_active=datetime.now(timezone.utc).isoformat())
         char = get_character(user_id)
         emit("game_msg", {"text": f"你闭关修炼了 {format_duration(elapsed)}，修为增长 {gain}。", "type": "heal"})
     else:
-        update_character(user_id, last_active=datetime.utcnow().isoformat())
+        update_character(user_id, last_active=datetime.now(timezone.utc).isoformat())
 
     loc = LOCATIONS.get(char["location"], LOCATIONS["qingyun_town"])
     stats = get_full_stats(char)

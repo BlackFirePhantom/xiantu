@@ -130,7 +130,7 @@ def proficiency_mult(prof_val):
 
 def gain_proficiency(char, uid, source="fight"):
     """给所有已学功法增加熟练度，返回 {tech_id: gained} 字典"""
-    from models import update_character
+    from game_state import update_cached_character
     learned = json.loads(char["techniques"]) if char["techniques"] else []
     if not learned:
         return {}
@@ -151,5 +151,5 @@ def gain_proficiency(char, uid, source="fight"):
         prof[tid] = new_val
         gained[tid] = amount
     if gained:
-        update_character(uid, proficiency=json.dumps(prof))
+        update_cached_character(uid, proficiency=json.dumps(prof))
     return gained

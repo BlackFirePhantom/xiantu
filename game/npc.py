@@ -2,7 +2,7 @@
 
 import random
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from game_data import ITEMS, MONSTERS, LOCATIONS, realm_name
 from npc_data import NPCS, QUESTS, NPC_GOODWILL_TIERS, get_goodwill_tier, get_sect_rank
 
@@ -11,7 +11,7 @@ def get_npc_info_for_location(char):
     """获取当前地点的 NPC 信息"""
     loc_id = char["location"]
     goodwill = json.loads(char["npc_goodwill"]) if char["npc_goodwill"] else {}
-    today = datetime.utcnow().strftime("%Y-%m-%d")
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     gift_dates = json.loads(char["npc_gift_date"]) if char["npc_gift_date"] else {}
     result = []
     for nid, npc in NPCS.items():
@@ -90,7 +90,7 @@ def interact_with_npc(char, uid, nid):
         return {"success": False, "message": "此地并无此人。"}
 
     gw = json.loads(char["npc_goodwill"]) if char["npc_goodwill"] else {}
-    today = datetime.utcnow().strftime("%Y-%m-%d")
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     gift_dates = json.loads(char["npc_gift_date"]) if char["npc_gift_date"] else {}
     daily_key = f"daily_{nid}"
 
@@ -146,7 +146,7 @@ def interact_with_npc(char, uid, nid):
 
 def give_npc_gift(char, inv, nid, item_id):
     """赠礼给 NPC，返回结果 dict"""
-    today = datetime.utcnow().strftime("%Y-%m-%d")
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     gift_dates = json.loads(char["npc_gift_date"]) if char["npc_gift_date"] else {}
     if gift_dates.get(nid) == today:
         return {"success": False, "message": "今日已经赠过礼了，明日再来。"}

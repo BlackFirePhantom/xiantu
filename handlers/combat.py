@@ -66,6 +66,7 @@ def do_fight():
     log = [f"—— 妖兽出没！{monster['name']}（{realm_name(monster['level'])}）{element_msg}——"]
 
     # 战斗类突发事件判定
+    bonus_drop_event = None
     for evt in SURPRISE_EVENTS:
         if evt["trigger"] == "fight" and random.random() < evt["chance"]:
             log.append(f"【突发】{evt['text']}")
@@ -90,7 +91,7 @@ def do_fight():
                 monster["atk"] = max(monster["atk"], extra_m["atk"])
                 log.append(f"增援：{extra_m['name']}（{realm_name(extra_m['level'])}）加入了战斗！")
             elif eff == "bonus_drop":
-                pass  # handled after combat
+                bonus_drop_event = evt  # 战后处理掉落
             break  # 只触发一个战斗突发事件
 
     round_num = 0
@@ -141,11 +142,10 @@ def do_fight():
                 if random.random() < chance:
                     drops.append(item_id)
         # 战斗突发事件掉落加成
-        for evt in SURPRISE_EVENTS:
-            if evt["trigger"] == "fight" and evt.get("effect") == "bonus_drop":
-                for drop_item in evt.get("item_pool", []):
-                    if random.random() < evt.get("drop_chance", 0.5):
-                        drops.append(drop_item)
+        if bonus_drop_event is not None:
+            for drop_item in bonus_drop_event.get("item_pool", []):
+                if random.random() < bonus_drop_event.get("drop_chance", 0.5):
+                    drops.append(drop_item)
 
         inv = get_character_inventory(session["user_id"])
         for item_id in drops:

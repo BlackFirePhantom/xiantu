@@ -16,6 +16,7 @@ logger = logging.getLogger("xiantu.game_state")
 online_users = {}      # username -> sid
 last_activity = {}     # username -> timestamp of last action
 afk_players = {}       # username -> timestamp when AFK started
+afk_lock = threading.Lock()  # 保护 touch_activity 的 check-then-act 序列
 
 # 拍卖行状态
 active_auctions = {}   # auction_id -> auction_detail
@@ -145,14 +146,24 @@ def touch_activity(username):
     if not username:
         return
     now = time.time()
-    
-    # 查找闲置时间并结算挂机收益
-    if username in last_activity:
-        idle_duration = now - last_activity[username]
-        if idle_duration >= AFK_TIMEOUT:
-            _settle_afk_reward(username, idle_duration)
-            
-    last_activity[username] = now
+
+    # 加锁保护 check-then-act，防止并发双重结算
+    need_settle = False
+    idle_duration = 0
+    with afk_lock:
+        if username in last_activity:
+            idle_duration = now - last_activity[username]
+            if idle_duration >= AFK_TIMEOUT:
+                # 先更新时间再结算，阻止后续并发事件重复触发
+                last_activity[username] = now
+                need_settle = True
+            else:
+                last_activity[username] = now
+        else:
+            last_activity[username] = now
+
+    if need_settle:
+        _settle_afk_reward(username, idle_duration)
 
 def _settle_afk_reward(username, idle_duration):
     """挂机收益的惰性延迟结算具体逻辑。"""
@@ -192,8 +203,7 @@ def _settle_afk_reward(username, idle_duration):
         inv[item_id] = inv.get(item_id, 0) + 1
     set_character_inventory_cached(user["id"], inv)
     
-    # 更新经验
-    char = get_cached_character(user["id"])
+    # 更新经验（char 引用已在上方获取，缓存返回的是同一 dict）
     if get_exp_needed(char["level"]) != "-":
         update_cached_character(user["id"], exp=char["exp"] + exp_gain)
         

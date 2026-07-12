@@ -2,7 +2,7 @@
 
 import json
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from game.cultivation import process_offline_cultivation, attempt_breakthrough
 from game_data import MAX_LEVEL, BREAKTHROUGH_CHANCE
 
@@ -24,26 +24,26 @@ class TestProcessOfflineCultivation:
         assert elapsed == 0
 
     def test_short_time(self):
-        recent = (datetime.utcnow() - timedelta(seconds=5)).isoformat()
+        recent = (datetime.now(timezone.utc) - timedelta(seconds=5)).isoformat()
         char = self._make_char(last_active=recent)
         gain, elapsed = process_offline_cultivation(char)
         assert gain == 0
 
     def test_one_hour(self):
-        past = (datetime.utcnow() - timedelta(hours=1)).isoformat()
+        past = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
         char = self._make_char(last_active=past)
         gain, elapsed = process_offline_cultivation(char)
         assert gain > 0
         assert elapsed >= 3500  # ~1 hour
 
     def test_max_level_no_gain(self):
-        past = (datetime.utcnow() - timedelta(hours=1)).isoformat()
+        past = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
         char = self._make_char(level=MAX_LEVEL, last_active=past)
         gain, elapsed = process_offline_cultivation(char)
         assert gain == 0
 
     def test_clamped_to_24h(self):
-        past = (datetime.utcnow() - timedelta(hours=48)).isoformat()
+        past = (datetime.now(timezone.utc) - timedelta(hours=48)).isoformat()
         char = self._make_char(last_active=past)
         gain, elapsed = process_offline_cultivation(char)
         assert elapsed <= 24 * 3600 + 1

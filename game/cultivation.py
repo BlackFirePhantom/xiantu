@@ -1,7 +1,7 @@
 """仙途游戏修炼/挂机系统纯业务逻辑"""
 
 import random
-from datetime import datetime
+from datetime import datetime, timezone
 
 from game_data import (
     IDLE_EXP_PER_SEC, IDLE_MAX_HOURS,
@@ -28,7 +28,9 @@ def process_offline_cultivation(char):
         last = datetime.fromisoformat(char["last_active"])
     except (ValueError, TypeError):
         return 0, 0
-    elapsed = (datetime.utcnow() - last).total_seconds()
+    if last.tzinfo is None:
+        last = last.replace(tzinfo=timezone.utc)
+    elapsed = (datetime.now(timezone.utc) - last).total_seconds()
     max_sec = IDLE_MAX_HOURS * 3600
     elapsed = min(elapsed, max_sec)
     if elapsed < 10:
