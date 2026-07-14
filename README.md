@@ -50,13 +50,24 @@
 
 ### 方式一：Docker（推荐）
 
+**全新部署**：
 ```bash
 git clone https://github.com/BlackFirePhantom/xiantu.git
 cd xiantu
 docker-compose up -d --build
 ```
-
 访问 `http://你的服务器IP:8500`
+
+**更新部署**：
+```bash
+# 拉取最新代码
+git pull origin main
+
+# 重新构建镜像并重启容器
+docker-compose up -d --build
+```
+> **提示**：如果遇到 `Permission denied` 权限问题，可运行 `sudo chown -R $USER:$USER .` 修复权限所有权。
+
 
 ### 方式二：直接运行
 
