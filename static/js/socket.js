@@ -17,28 +17,15 @@ socket.on("need_create", () => { window.location.href = "/create"; });
 
 socket.on("game_msg", (data) => addLog(data.text, data.type || "info"));
 
-socket.on("fight_log", (data) => {
-    const lines = data.log;
-    let i = 0;
-    function showNext() {
-        if (i >= lines.length) {
-            socket.emit("get_state");
-            return;
-        }
-        const line = lines[i];
-        let type = "fight";
-        if (line.startsWith("——")) type = "fight";
-        else if (line.includes("斗法胜利")) type = "fight-win";
-        else if (line.includes("陨落") || line.includes("不敌") || line.includes("灵力耗尽") || line.includes("灵力逆行")) type = "fight-lose";
-        else if (line.includes("机缘") || line.includes("获得") || line.includes("天降")) type = "shop";
-        else if (line.includes("损失") || line.includes("遗落") || line.includes("修为化为") || line.includes("付诸东流") || line.includes("烟消云散")) type = "error";
-        else if (line.includes("突发")) type = "buff";
-        addLog(line, type);
-        i++;
-        const delay = line.startsWith("——") ? 500 : line.includes("回合") ? 400 : line.includes("斗法") || line.includes("陨落") || line.includes("不敌") ? 600 : 200;
-        setTimeout(showNext, delay);
-    }
-    showNext();
+// 回合制战斗事件
+socket.on("combat_start", (data) => {
+    showCombatPanel(data);
+});
+socket.on("combat_round", (data) => {
+    updateCombatRound(data);
+});
+socket.on("combat_end", (data) => {
+    endCombat(data);
 });
 
 socket.on("system_msg", (data) => addLog(data.text, "system"));

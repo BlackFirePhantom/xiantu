@@ -52,6 +52,8 @@ _MIGRATIONS = [
     (13, "daily_quest_date", "characters", "TEXT DEFAULT NULL"),
     (14, "npc_gift_date",    "characters", "TEXT DEFAULT '{}'"),
     (15, "proficiency",      "characters", "TEXT DEFAULT '{}'"),
+    (16, "mp",               "characters", "INTEGER DEFAULT 50"),
+    (17, "max_mp",           "characters", "INTEGER DEFAULT 50"),
 ]
 
 

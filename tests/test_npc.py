@@ -5,6 +5,7 @@ import pytest
 from game.npc import (
     get_npc_info_for_location, get_quest_info, get_sect_info,
     accept_quest, complete_quest, check_quest_progress,
+    give_npc_gift, interact_with_npc,
 )
 
 
@@ -80,3 +81,29 @@ class TestCheckQuestProgress:
         ]))
         changed, updated = check_quest_progress(char, "kill", "spirit_slime")
         assert changed is False
+
+
+class TestNpcGiftError:
+    def test_invalid_npc(self):
+        char = _make_char()
+        inv = {"lingcao": 10}
+        result = give_npc_gift(char, inv, "non_existent_npc", "lingcao")
+        assert result["success"] is False
+        assert "message" in result
+        assert result["message"] == "此人查无此名。"
+
+    def test_missing_item(self):
+        char = _make_char()
+        inv = {}
+        result = give_npc_gift(char, inv, "su_wan_jin", "lingcao")
+        assert result["success"] is False
+        assert result["message"] == "你没有这个物品。"
+
+
+class TestInteractError:
+    def test_invalid_npc(self):
+        char = _make_char()
+        result = interact_with_npc(char, 1, "non_existent_npc")
+        assert result["success"] is False
+        assert result["message"] == "此人查无此名。"
+

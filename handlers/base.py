@@ -139,6 +139,7 @@ def do_get_state(user_id):
             "name": char["name"], "level": char["level"], "realm": realm_name(char["level"]),
             "exp": char["exp"], "exp_needed": get_exp_needed(char["level"]),
             "hp": char["hp"], "max_hp": stats["max_hp"],
+            "mp": char.get("mp", stats.get("max_mp", 50)), "max_mp": stats.get("max_mp", 50),
             "atk": stats["atk"], "def": stats["def"],
             "gold": char["gold"], "kills": char["kills"], "deaths": char["deaths"],
             "has_breakthrough_pill": char["has_breakthrough_pill"],

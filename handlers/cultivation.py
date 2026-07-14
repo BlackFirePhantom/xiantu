@@ -43,12 +43,12 @@ def register_cultivation_handlers(socketio):
         prof_parts = [f"{TECHNIQUES[tid]['name']}+{amt}" for tid, amt in prof_gained.items() if tid in TECHNIQUES]
         prof_msg = f" 熟练度提升（{', '.join(prof_parts)}）。" if prof_parts else ""
 
-        update_character(session["user_id"], hp=stats["max_hp"])
+        update_character(session["user_id"], hp=stats["max_hp"], mp=stats.get("max_mp", 50))
 
         msgs = [
-            f"你盘膝而坐，运转功法，天地灵气涌入体内……气血完全恢复。{prof_msg}",
-            f"你闭目凝神，灵力缓缓流转，伤势痊愈，气血充盈。{prof_msg}",
-            f"你静心打坐，体悟天地大道，灵台清明，气血恢复如初。{prof_msg}",
+            f"你盘膝而坐，运转功法，天地灵气涌入体内……气血完全恢复，灵力充盈。{prof_msg}",
+            f"你闭目凝神，灵力缓缓流转，伤势痊愈，气血充盈，灵力回满。{prof_msg}",
+            f"你静心打坐，体悟天地大道，灵台清明，气血恢复如初，灵力充沛。{prof_msg}",
         ]
         emit("game_msg", {"text": random.choice(msgs), "type": "heal"})
         do_get_state(session["user_id"])

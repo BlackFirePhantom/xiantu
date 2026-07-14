@@ -20,6 +20,11 @@ def calc_level_stats(level):
     }
 
 
+def calc_max_mp(level):
+    """计算等级对应的最大灵力值"""
+    return 50 + (level - 1) * 5
+
+
 def get_full_stats(char):
     """计算角色完整属性（含装备、功法、经脉、灵宠加成）"""
     base = calc_level_stats(char["level"])
@@ -73,7 +78,7 @@ def get_full_stats(char):
                 defn += int(ps["def"] * PET_BATTLE_RATIO)
                 break
 
-    return {"atk": atk, "def": defn, "max_hp": max_hp}
+    return {"atk": atk, "def": defn, "max_hp": max_hp, "max_mp": calc_max_mp(char["level"])}
 
 
 def get_exp_needed(level):

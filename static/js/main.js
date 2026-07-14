@@ -46,6 +46,36 @@ document.addEventListener("keydown", (e) => {
     // 任何弹窗打开时不处理快捷键
     if (isAnyModalOpen()) return;
 
+    // 战斗中快捷键
+    if (combatState) {
+        switch (e.key.toLowerCase()) {
+            case " ": // 空格 - 普攻
+                sendFightAction("attack");
+                e.preventDefault();
+                break;
+            case "q": // Q - 防御
+                sendFightAction("defend");
+                e.preventDefault();
+                break;
+            case "e": // E - 逃跑
+                sendFightAction("flee");
+                e.preventDefault();
+                break;
+            case "1": case "2": case "3": case "4": case "5":
+            case "6": case "7": case "8": case "9":
+                {
+                    const idx = parseInt(e.key) - 1;
+                    const skillBtns = document.querySelectorAll("#combat-actions .btn-skill");
+                    if (idx < skillBtns.length && !skillBtns[idx].disabled) {
+                        skillBtns[idx].click();
+                        e.preventDefault();
+                    }
+                }
+                break;
+        }
+        return;
+    }
+
     // 游戏快捷键
     switch (e.key.toLowerCase()) {
         case "f": // F - 斩妖

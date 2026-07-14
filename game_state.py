@@ -24,6 +24,10 @@ auction_npc_state = {} # NPC 竞拍预算等状态，由 app.py 初始化
 auction_last_refresh = 0
 AUCTION_REFRESH_INTERVAL = 4 * 3600 * 1000  # 4小时(ms)
 
+# 战斗状态（回合制）
+active_combats = {}     # user_id -> combat_state dict
+combat_lock = threading.Lock()
+
 # SocketIO 实例引用（由 app.py 启动时注入）
 socketio = None
 

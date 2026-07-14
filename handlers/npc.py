@@ -57,7 +57,7 @@ def register_npc_handlers(socketio):
         result = give_npc_gift(char, inv, nid, item_id)
 
         if not result["success"]:
-            emit("game_msg", {"text": result["message"], "type": "error"})
+            emit("game_msg", {"text": result.get("message", "赠送失败。"), "type": "error"})
             return
 
         set_character_inventory(session["user_id"], result["updated_inv"])

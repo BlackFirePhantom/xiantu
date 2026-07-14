@@ -84,7 +84,7 @@ def get_sect_info(char):
 def interact_with_npc(char, uid, nid):
     """与 NPC 交互，返回结果 dict"""
     if not nid or nid not in NPCS:
-        return {"success": False}
+        return {"success": False, "message": "此人查无此名。"}
     npc = NPCS[nid]
     if npc["location"] != char["location"]:
         return {"success": False, "message": "此地并无此人。"}
@@ -156,7 +156,7 @@ def give_npc_gift(char, inv, nid, item_id):
 
     npc = NPCS.get(nid)
     if not npc:
-        return {"success": False}
+        return {"success": False, "message": "此人查无此名。"}
 
     prefs = npc.get("gift_preferences", {})
     if item_id in prefs.get("liked", []):
@@ -189,7 +189,7 @@ def give_npc_gift(char, inv, nid, item_id):
 def accept_quest(char, qid):
     """接受任务，返回结果 dict"""
     if not qid or qid not in QUESTS:
-        return {"success": False}
+        return {"success": False, "message": "此任务查无此名。"}
     quest = QUESTS[qid]
     if char["level"] < quest["req_realm"]:
         return {"success": False, "message": f"境界不足，需要{realm_name(quest['req_realm'])}。"}
@@ -210,7 +210,7 @@ def accept_quest(char, qid):
 def complete_quest(char, qid):
     """完成任务，返回结果 dict"""
     if not qid or qid not in QUESTS:
-        return {"success": False}
+        return {"success": False, "message": "此任务查无此名。"}
     quest = QUESTS[qid]
     active = json.loads(char["active_quests"]) if char["active_quests"] else []
     target = None

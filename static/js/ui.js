@@ -8,6 +8,12 @@ function renderState(s) {
     document.getElementById("char-realm").textContent = c.realm;
     document.getElementById("char-exp").textContent = `${c.exp} / ${c.exp_needed}`;
     document.getElementById("char-hp").textContent = `${c.hp} / ${c.max_hp}`;
+    if (c.mp !== undefined) {
+        document.getElementById("char-mp").textContent = `${c.mp} / ${c.max_mp}`;
+        const mpPct = c.max_mp > 0 ? (c.mp / c.max_mp * 100) : 0;
+        const mpBar = document.getElementById("mp-bar");
+        if (mpBar) mpBar.style.width = mpPct + "%";
+    }
     document.getElementById("char-atk").textContent = c.atk;
     document.getElementById("char-def").textContent = c.def;
     document.getElementById("char-gold").textContent = c.gold + " 灵石";
@@ -888,4 +894,204 @@ function switchMobileTab(tab) {
     if (activeBtn) {
         activeBtn.classList.add("active");
     }
+}
+
+// ═══════════════ 回合制战斗面板 ═══════════════
+
+let combatState = null;
+
+function showCombatPanel(data) {
+    combatState = data;
+    document.getElementById("action-bar").style.display = "none";
+    document.getElementById("fortune-popup").style.display = "none";
+    const panel = document.getElementById("combat-panel");
+    panel.style.display = "block";
+
+    // 怪物完整信息
+    const m = data.monster;
+    document.getElementById("combat-monster-name").textContent = m.name;
+    document.getElementById("combat-monster-realm").textContent = m.realm || `(${m.level}级)`;
+    document.getElementById("combat-monster-element").textContent = m.element ? `${m.element}属性` : "";
+    document.getElementById("combat-monster-atk").textContent = m.atk;
+    document.getElementById("combat-monster-def").textContent = m.def;
+    const skillNames = (m.skills || []).map(s => s.name).join("、");
+    document.getElementById("combat-monster-skills").textContent = skillNames || "无";
+
+    // 初始日志
+    const logDiv = document.getElementById("combat-log");
+    logDiv.innerHTML = "";
+    data.log.forEach(line => addCombatLogLine(logDiv, line));
+
+    // 强制不带动画初始化 HP/Hurt 宽度，防止残影
+    const mhBar = document.getElementById("combat-monster-hp-bar");
+    const mhHurt = document.getElementById("combat-monster-hp-hurt");
+    const phBar = document.getElementById("combat-player-hp-bar");
+    const phHurt = document.getElementById("combat-player-hp-hurt");
+    if (mhBar) mhBar.style.transition = 'none';
+    if (mhHurt) mhHurt.style.transition = 'none';
+    if (phBar) phBar.style.transition = 'none';
+    if (phHurt) phHurt.style.transition = 'none';
+
+    updateCombatHP(data);
+
+    // 强制重绘以应用初始值
+    if (mhBar) mhBar.offsetHeight;
+
+    // 恢复过渡动画
+    if (mhBar) mhBar.style.transition = '';
+    if (mhHurt) mhHurt.style.transition = '';
+    if (phBar) phBar.style.transition = '';
+    if (phHurt) phHurt.style.transition = '';
+
+    renderCombatActions(data);
+}
+
+function updateCombatRound(data) {
+    if (!combatState) return;
+    const logDiv = document.getElementById("combat-log");
+    data.log.forEach(line => addCombatLogLine(logDiv, line));
+    logDiv.scrollTop = logDiv.scrollHeight;
+
+    combatState.player_hp = data.player_hp;
+    combatState.player_max_hp = data.player_max_hp;
+    combatState.player_mp = data.player_mp;
+    combatState.player_max_mp = data.player_max_mp;
+    combatState.monster_hp = data.monster_hp;
+    combatState.monster_max_hp = data.monster_max_hp;
+    combatState.skills = data.skills;
+    combatState.round = data.round;
+
+    updateCombatHP(data);
+
+    // 显示buff/debuff
+    let buffsText = "";
+    if (data.player_buffs) {
+        for (const [stat, info] of Object.entries(data.player_buffs)) {
+            const pct = Math.round((info.mult - 1) * 100);
+            buffsText += `${stat === "atk" ? "攻击" : "防御"}${pct >= 0 ? "+" : ""}${pct}%(${info.rounds}回合) `;
+        }
+    }
+    if (data.player_debuffs) {
+        for (const [stat, info] of Object.entries(data.player_debuffs)) {
+            const pct = Math.round((info.mult - 1) * 100);
+            buffsText += `${stat === "atk" ? "攻击" : "防御"}${pct}%(${info.rounds}回合) `;
+        }
+    }
+    document.getElementById("combat-buffs").textContent = buffsText;
+
+    renderCombatActions(data);
+}
+
+function endCombat(data) {
+    const logDiv = document.getElementById("combat-log");
+    data.log.forEach(line => {
+        if (line.includes("斗法胜利") || line.includes("天降机缘")) {
+            addCombatLogLine(logDiv, line, "fight-win");
+        } else if (line.includes("陨落") || line.includes("不敌") || line.includes("损失")) {
+            addCombatLogLine(logDiv, line, "fight-lose");
+        } else {
+            addCombatLogLine(logDiv, line);
+        }
+    });
+    logDiv.scrollTop = logDiv.scrollHeight;
+
+    // 也写到主日志
+    data.log.forEach(line => {
+        let type = "info";
+        if (line.includes("斗法胜利")) type = "fight-win";
+        else if (line.includes("陨落") || line.includes("不敌")) type = "fight-lose";
+        else if (line.includes("机缘") || line.includes("获得")) type = "shop";
+        addLog(line, type);
+    });
+
+    // 延迟隐藏战斗面板
+    setTimeout(() => {
+        document.getElementById("combat-panel").style.display = "none";
+        document.getElementById("action-bar").style.display = "flex";
+        combatState = null;
+        socket.emit("get_state");
+    }, 2000);
+}
+
+function updateCombatHP(data) {
+    const mhpPct = data.monster_max_hp > 0 ? (data.monster_hp / data.monster_max_hp * 100) : 0;
+    document.getElementById("combat-monster-hp-bar").style.width = Math.max(0, mhpPct) + "%";
+    const mhHurt = document.getElementById("combat-monster-hp-hurt");
+    if (mhHurt) mhHurt.style.width = Math.max(0, mhpPct) + "%";
+    document.getElementById("combat-monster-hp-text").textContent = `${Math.max(0, data.monster_hp)} / ${data.monster_max_hp}`;
+
+    const phpPct = data.player_max_hp > 0 ? (data.player_hp / data.player_max_hp * 100) : 0;
+    document.getElementById("combat-player-hp-bar").style.width = Math.max(0, phpPct) + "%";
+    const phHurt = document.getElementById("combat-player-hp-hurt");
+    if (phHurt) phHurt.style.width = Math.max(0, phpPct) + "%";
+    document.getElementById("combat-player-hp-text").textContent = `${Math.max(0, data.player_hp)} / ${data.player_max_hp}`;
+
+    const mpPct = data.player_max_mp > 0 ? (data.player_mp / data.player_max_mp * 100) : 0;
+    document.getElementById("combat-player-mp-bar").style.width = Math.max(0, mpPct) + "%";
+    document.getElementById("combat-player-mp-text").textContent = `${data.player_mp} / ${data.player_max_mp}`;
+}
+
+function renderCombatActions(data) {
+    const actionsDiv = document.getElementById("combat-actions");
+    actionsDiv.innerHTML = "";
+
+    // 普攻按钮
+    const atkBtn = document.createElement("button");
+    atkBtn.className = "btn btn-fight";
+    atkBtn.textContent = "普攻";
+    atkBtn.onclick = () => { sendFightAction("attack"); };
+    actionsDiv.appendChild(atkBtn);
+
+    // 技能按钮
+    if (data.skills) {
+        data.skills.forEach((s, i) => {
+            const skill = s.skill;
+            const btn = document.createElement("button");
+            btn.className = "btn btn-skill";
+            const mpCost = skill.mp_cost || 0;
+            const canUse = data.player_mp >= mpCost;
+            if (!canUse) btn.disabled = true;
+            btn.innerHTML = `${skill.name}<span class="mp-cost">🔪${mpCost}</span>`;
+            btn.title = skill.desc || "";
+            btn.onclick = () => { sendFightAction("skill", s.tech_id); };
+            actionsDiv.appendChild(btn);
+        });
+    }
+
+    // 防御按钮
+    const defBtn = document.createElement("button");
+    defBtn.className = "btn btn-rest";
+    defBtn.textContent = "防御";
+    defBtn.onclick = () => { sendFightAction("defend"); };
+    actionsDiv.appendChild(defBtn);
+
+    // 逃跑按钮
+    const fleeBtn = document.createElement("button");
+    fleeBtn.className = "btn";
+    fleeBtn.textContent = "逃跑";
+    fleeBtn.onclick = () => { sendFightAction("flee"); };
+    actionsDiv.appendChild(fleeBtn);
+}
+
+function sendFightAction(action, skillId) {
+    const data = { action: action };
+    if (skillId) data.skill_id = skillId;
+    socket.emit("fight_action", data);
+    // 禁用按钮防止重复点击
+    document.querySelectorAll("#combat-actions .btn").forEach(b => b.disabled = true);
+}
+
+function addCombatLogLine(logDiv, line, type) {
+    const div = document.createElement("div");
+    let cls = "combat-log-line";
+    if (!type) {
+        if (line.startsWith("--")) type = "fight";
+        else if (line.includes("施展") || line.includes("施展")) type = "buff";
+        else if (line.includes("伤害") && line.includes("你")) type = "fight-lose";
+        else if (line.includes("伤害")) type = "fight";
+        else type = "info";
+    }
+    div.className = cls + " log-" + type;
+    div.textContent = line;
+    logDiv.appendChild(div);
 }

@@ -419,14 +419,22 @@ a:focus-visible {
     box-shadow: inset 0 2px 4px rgba(0,0,0,0.5);
 }
 .bar { 
+    position: absolute;
+    top: 0;
+    left: 0;
     height: 100%; 
     border-radius: 9px; 
     transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1); 
 }
-.hp-bar { 
-    background: linear-gradient(90deg, #7c2d2d, #b23b3b); 
+.hp-bar {
+    background: linear-gradient(90deg, #7c2d2d, #b23b3b);
     box-shadow: 0 0 8px rgba(211, 78, 78, 0.4);
 }
+.mp-bar {
+    background: linear-gradient(90deg, #1a4a6b, #2d7ba8);
+    box-shadow: 0 0 8px rgba(45, 123, 168, 0.4);
+}
+.mp-line .bar-text { color: #b8d8f0; }
 .bar-text {
     position: absolute;
     right: 8px;
@@ -1499,4 +1507,124 @@ a:focus-visible {
 
 .action-bar .btn { 
     position: relative; 
+}
+
+/* ===== 战斗面板（回合制） ===== */
+.combat-panel {
+    background: rgba(13, 18, 25, 0.9);
+    border: 1px solid rgba(211, 78, 78, 0.3);
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 12px;
+}
+.combat-monster-info {
+    margin-bottom: 12px;
+    padding: 12px;
+    border-radius: 8px;
+    background: rgba(40, 15, 15, 0.4);
+    border: 1px solid rgba(211, 78, 78, 0.2);
+}
+.combat-monster-header {
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid rgba(211, 78, 78, 0.15);
+}
+.combat-monster-stats .stat-line {
+    display: none;
+}
+.combat-monster-stats .stat-line span:first-child {
+    color: var(--text-secondary);
+    width: 36px;
+    display: inline-block;
+}
+.combat-stat-val {
+    color: #e0d0c0;
+    font-weight: 500;
+}
+.combat-hp-bar-container {
+    height: 14px;
+    margin: 2px 0 6px 36px;
+}
+.combat-player-info {
+    margin-bottom: 10px;
+}
+.combat-player-info .stat-line {
+    font-size: 12px;
+    margin-bottom: 3px;
+}
+.combat-player-info .stat-line span:first-child {
+    color: var(--text-secondary);
+    width: 60px;
+    display: inline-block;
+}
+.combat-player-info .bar-container {
+    height: 14px;
+    margin: 2px 0 6px 60px;
+}
+.monster-hp-bar {
+    background: linear-gradient(90deg, #5a2020, #8b3030);
+}
+.combat-buffs {
+    font-size: 11px;
+    color: var(--accent-gold);
+    margin-top: 4px;
+    min-height: 14px;
+}
+.combat-log {
+    max-height: 200px;
+    overflow-y: auto;
+    font-size: 13px;
+    line-height: 1.6;
+    padding: 8px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 6px;
+    margin-bottom: 10px;
+}
+.combat-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.combat-actions .btn {
+    padding: 8px 14px;
+    font-size: 13px;
+}
+.btn-skill {
+    background: rgba(30, 40, 60, 0.8);
+    border-color: rgba(72, 166, 223, 0.3);
+}
+.btn-skill:hover {
+    border-color: var(--accent-sky);
+    box-shadow: 0 4px 12px rgba(72, 166, 223, 0.2);
+}
+.btn-skill:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+.btn-skill .mp-cost {
+    font-size: 10px;
+    color: var(--accent-sky);
+    margin-left: 4px;
+}
+
+/* ===== HP Hurt Trailing Animation Bars ===== */
+.monster-hp-bar {
+    background: linear-gradient(90deg, #8b2020, #c63b3b);
+    z-index: 2;
+}
+.monster-hp-hurt {
+    background: #ff5555;
+    z-index: 1;
+    transition: width 0.8s cubic-bezier(0.25, 1, 0.5, 1) 0.2s;
+}
+.hp-bar {
+    z-index: 2;
+}
+.player-hp-hurt {
+    background: #ff7777;
+    z-index: 1;
+    transition: width 0.8s cubic-bezier(0.25, 1, 0.5, 1) 0.2s;
+}
+.mp-bar {
+    z-index: 2;
 }

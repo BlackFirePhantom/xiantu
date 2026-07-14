@@ -38,6 +38,13 @@
                         <span class="bar-text" id="char-hp">-</span>
                     </div>
                 </div>
+                <div class="stat-line mp-line">
+                    <span>灵力</span>
+                    <div class="bar-container">
+                        <div class="bar mp-bar" id="mp-bar"></div>
+                        <span class="bar-text" id="char-mp">-</span>
+                    </div>
+                </div>
                 <div class="stat-line"><span>攻击</span><span id="char-atk">-</span></div>
                 <div class="stat-line"><span>防御</span><span id="char-def">-</span></div>
                 <div class="stat-line"><span>灵石</span><span id="char-gold" class="gold-text">-</span></div>
@@ -77,7 +84,7 @@
                 <div id="npc-list"></div>
             </div>
 
-            <div class="action-bar">
+            <div class="action-bar" id="action-bar">
                 <button class="btn btn-fight" id="btn-fight" onclick="doFight()">斩妖 <span class="shortcut-hint">F</span></button>
                 <button class="btn btn-rest" id="btn-rest" onclick="doMeditate()">打坐修炼 <span class="shortcut-hint">M</span></button>
                 <button class="btn btn-breakthrough" id="btn-breakthrough" onclick="doBreakthrough()">境界突破 <span class="shortcut-hint">B</span></button>
@@ -88,6 +95,39 @@
                 <button class="btn btn-pet" onclick="showPanel('pets')">灵宠</button>
                 <button class="btn btn-auction" onclick="showAuction()">拍卖行</button>
                 <button class="btn btn-leaderboard" onclick="showLeaderboard()">天骄榜 <span class="shortcut-hint">L</span></button>
+            </div>
+
+            <!-- 战斗面板（回合制） -->
+            <div id="combat-panel" class="combat-panel" style="display:none;">
+                <div class="combat-monster-info">
+                    <div class="combat-monster-header">
+                        <span id="combat-monster-name" class="combat-name"></span>
+                        <span id="combat-monster-realm" class="combat-realm"></span>
+                        <span id="combat-monster-element" class="combat-element"></span>
+                    </div>
+                    <div class="combat-monster-stats">
+                        <div class="stat-line"><span>气血</span><span id="combat-monster-hp-text" class="combat-stat-val"></span></div>
+                        <div class="bar-container combat-hp-bar-container">
+                            <div id="combat-monster-hp-hurt" class="bar monster-hp-hurt" style="width: 100%;"></div>
+                            <div id="combat-monster-hp-bar" class="bar monster-hp-bar" style="width: 100%;"></div>
+                        </div>
+                        <div class="stat-line"><span>攻击</span><span id="combat-monster-atk" class="combat-stat-val"></span></div>
+                        <div class="stat-line"><span>防御</span><span id="combat-monster-def" class="combat-stat-val"></span></div>
+                        <div class="stat-line"><span>技能</span><span id="combat-monster-skills" class="combat-stat-val"></span></div>
+                    </div>
+                </div>
+                <div class="combat-player-info">
+                    <div class="stat-line"><span>你的气血</span><span id="combat-player-hp-text" class="combat-stat-val"></span></div>
+                    <div class="bar-container">
+                        <div id="combat-player-hp-hurt" class="bar player-hp-hurt" style="width: 100%;"></div>
+                        <div id="combat-player-hp-bar" class="bar hp-bar" style="width: 100%;"></div>
+                    </div>
+                    <div class="stat-line"><span>你的灵力</span><span id="combat-player-mp-text" class="combat-stat-val"></span></div>
+                    <div class="bar-container"><div id="combat-player-mp-bar" class="bar mp-bar"></div></div>
+                    <div id="combat-buffs" class="combat-buffs"></div>
+                </div>
+                <div id="combat-log" class="combat-log"></div>
+                <div class="combat-actions" id="combat-actions"></div>
             </div>
 
             <!-- 奇遇弹窗 -->
@@ -224,10 +264,10 @@
         </div>
     </div>
 
-    <script src="{{ url_for('static', filename='js/socket.io.min.js') }}?v=2"></script>
-    <script src="{{ url_for('static', filename='js/socket.js') }}?v=2"></script>
-    <script src="{{ url_for('static', filename='js/ui.js') }}?v=2"></script>
-    <script src="{{ url_for('static', filename='js/main.js') }}?v=2"></script>
+    <script src="{{ url_for('static', filename='js/socket.io.min.js') }}?v=3"></script>
+    <script src="{{ url_for('static', filename='js/socket.js') }}?v=3"></script>
+    <script src="{{ url_for('static', filename='js/ui.js') }}?v=3"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}?v=3"></script>
     <script>
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('{{ url_for("static", filename="sw.js") }}').catch(() => {});
