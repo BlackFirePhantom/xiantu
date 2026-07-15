@@ -14,6 +14,7 @@ from game_state import (
 )
 from game_data import LOCATIONS, ITEMS, FORTUNE_EVENTS
 from game.events import check_fortune, process_surprise, process_fortune_outcome
+from .security import get_fortune_choice
 from game.npc import check_quest_progress
 
 # 导入其它 Handler 的业务逻辑函数（单向依赖）
@@ -116,16 +117,10 @@ def register_gameplay_handlers(socketio):
         char = get_character(session["user_id"])
         if not char: return
 
-        event_id = data.get("event_id")
-        choice_idx = data.get("choice", 0)
-
-        event = None
-        for e in FORTUNE_EVENTS:
-            if e["id"] == event_id:
-                event = e
-                break
-        if not event or choice_idx >= len(event["choices"]):
+        fortune_choice = get_fortune_choice(data, FORTUNE_EVENTS)
+        if fortune_choice is None:
             return
+        event, choice_idx = fortune_choice
 
         outcome = event["choices"][choice_idx]["outcome"]
         messages, action = process_fortune_outcome(char, outcome, session["user_id"])

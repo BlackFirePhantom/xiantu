@@ -9,7 +9,7 @@ services:
     restart: unless-stopped
     environment:
       - XIANTU_SECRET_KEY=${XIANTU_SECRET_KEY:-}
-      - XIANTU_CORS=${XIANTU_CORS:-*}
+      - XIANTU_CORS=${XIANTU_CORS:-}
       - XIANTU_PORT=5000
     deploy:
       resources:

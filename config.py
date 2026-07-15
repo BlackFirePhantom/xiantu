@@ -20,7 +20,15 @@ if not SECRET_KEY:
             f.write(SECRET_KEY)
 
 # CORS 配置
-CORS_ALLOWED_ORIGINS = os.environ.get("XIANTU_CORS", "*")
+def parse_cors_origins(raw_origins):
+    """Return a normalized allowlist, or ``None`` to keep Socket.IO same-origin."""
+    if not raw_origins:
+        return None
+    origins = [origin.strip() for origin in raw_origins.split(",") if origin.strip()]
+    return origins or None
+
+
+CORS_ALLOWED_ORIGINS = parse_cors_origins(os.environ.get("XIANTU_CORS"))
 
 # 服务器配置
 HOST = os.environ.get("XIANTU_HOST", "0.0.0.0")

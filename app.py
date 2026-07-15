@@ -7,7 +7,7 @@ import time
 import json
 import logging
 from datetime import datetime
-from flask import Flask, render_template, request, redirect, url_for, session
+from flask import Flask, render_template, request, redirect, send_from_directory, url_for, session
 from flask_socketio import SocketIO, emit
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -85,6 +85,12 @@ def verify_password(password, stored_hash):
 
 # ═══════════════ 战斗文案（使用 game.combat） ═══════════════
 from game.combat import fmt_attack, fmt_monster_attack
+
+
+@app.route("/favicon.ico")
+def favicon():
+    """Serve the SVG icon for browsers that request the conventional favicon path."""
+    return send_from_directory(app.static_folder, "icon.svg", mimetype="image/svg+xml")
 
 # ═══════════════ 路由 ═══════════════
 
