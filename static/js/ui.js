@@ -184,6 +184,20 @@ function renderSecretRealm(data) {
     } else {
         body.appendChild(list);
     }
+
+    const settlements = data.pending_settlements || [];
+    if (settlements.length) {
+        const settlementTitle = document.createElement("h4");
+        settlementTitle.textContent = "待领取周结算";
+        body.appendChild(settlementTitle);
+        settlements.forEach(settlement => {
+            const button = document.createElement("button");
+            button.className = "btn btn-sm";
+            button.textContent = `${settlement.week_id}（贡献 ${settlement.contribution}）领取奖励`;
+            button.onclick = () => claimSecretRealmSettlement(settlement.week_id);
+            body.appendChild(button);
+        });
+    }
 }
 
 // ═══════════════ 背包渲染 ═══════════════

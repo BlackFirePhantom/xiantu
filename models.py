@@ -54,6 +54,7 @@ _MIGRATIONS = [
     (15, "proficiency",      "characters", "TEXT DEFAULT '{}'"),
     (16, "mp",               "characters", "INTEGER DEFAULT 50"),
     (17, "max_mp",           "characters", "INTEGER DEFAULT 50"),
+    (18, "settlement_claimed", "secret_realm_runs", "INTEGER DEFAULT 0"),
 ]
 
 
@@ -222,6 +223,60 @@ def save_secret_realm_boss(week_id, *, hp):
         conn.execute("UPDATE secret_realm_bosses SET hp = ? WHERE week_id = ?", (hp, week_id))
 
 
+def apply_secret_realm_boss_damage(user_id, week_id, requested_damage, max_hp=500):
+    """Atomically settle one hit against the shared weekly boss.
+
+    The immediate transaction serializes competing final hits so the unique reward
+    cannot be issued twice.
+    """
+    with get_db() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        conn.execute(
+            "INSERT OR IGNORE INTO secret_realm_bosses (week_id, hp, max_hp) VALUES (?, ?, ?)",
+            (week_id, max_hp, max_hp),
+        )
+        conn.execute(
+            "INSERT OR IGNORE INTO secret_realm_runs (week_id, user_id) VALUES (?, ?)",
+            (week_id, user_id),
+        )
+        boss = conn.execute(
+            "SELECT hp FROM secret_realm_bosses WHERE week_id = ?", (week_id,)
+        ).fetchone()
+        if boss["hp"] <= 0:
+            return {"ok": False, "reason": "boss_defeated"}
+
+        damage = min(max(1, int(requested_damage)), boss["hp"])
+        remaining_hp = boss["hp"] - damage
+        defeated = remaining_hp == 0
+        conn.execute("UPDATE secret_realm_bosses SET hp = ? WHERE week_id = ?", (remaining_hp, week_id))
+        conn.execute(
+            """UPDATE secret_realm_runs
+               SET contribution = contribution + ?, boss_damage = boss_damage + ?
+               WHERE week_id = ? AND user_id = ?""",
+            (damage, damage, week_id, user_id),
+        )
+
+        char = conn.execute(
+            "SELECT sect_contrib, inventory FROM characters WHERE user_id = ?", (user_id,)
+        ).fetchone()
+        if char:
+            inventory = json.loads(char["inventory"]) if char["inventory"] else {}
+            if defeated:
+                inventory["chiyan_jing"] = inventory.get("chiyan_jing", 0) + 1
+            conn.execute(
+                "UPDATE characters SET sect_contrib = ?, inventory = ? WHERE user_id = ?",
+                (char["sect_contrib"] + damage, json.dumps(inventory), user_id),
+            )
+
+    return {
+        "ok": True,
+        "damage": damage,
+        "boss_hp": remaining_hp,
+        "defeated": defeated,
+        "reward_granted": defeated,
+    }
+
+
 def get_secret_realm_leaderboard(week_id, limit=10):
     with get_db() as conn:
         rows = conn.execute(
@@ -232,6 +287,45 @@ def get_secret_realm_leaderboard(week_id, limit=10):
                ORDER BY r.contribution DESC, r.boss_damage DESC, c.name ASC
                LIMIT ?""",
             (week_id, limit),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def claim_secret_realm_settlement(user_id, week_id):
+    """Award one participant's weekly ranking reward exactly once."""
+    with get_db() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        run = conn.execute(
+            "SELECT contribution, settlement_claimed FROM secret_realm_runs WHERE week_id = ? AND user_id = ?",
+            (week_id, user_id),
+        ).fetchone()
+        if not run or run["contribution"] <= 0:
+            return {"ok": False, "reason": "not_participant"}
+        if run["settlement_claimed"]:
+            return {"ok": False, "reason": "already_claimed"}
+
+        rank = conn.execute(
+            """SELECT COUNT(*) + 1 FROM secret_realm_runs
+               WHERE week_id = ? AND (contribution > ? OR (contribution = ? AND boss_damage >
+                   (SELECT boss_damage FROM secret_realm_runs WHERE week_id = ? AND user_id = ?)))""",
+            (week_id, run["contribution"], run["contribution"], week_id, user_id),
+        ).fetchone()[0]
+        gold_reward = 20 + {1: 50, 2: 30, 3: 15}.get(rank, 0)
+        conn.execute(
+            "UPDATE secret_realm_runs SET settlement_claimed = 1 WHERE week_id = ? AND user_id = ?",
+            (week_id, user_id),
+        )
+        conn.execute("UPDATE characters SET gold = gold + ? WHERE user_id = ?", (gold_reward, user_id))
+    return {"ok": True, "week_id": week_id, "rank": rank, "gold_reward": gold_reward}
+
+
+def get_pending_secret_realm_settlements(user_id, current_week_id):
+    with get_db() as conn:
+        rows = conn.execute(
+            """SELECT week_id, contribution FROM secret_realm_runs
+               WHERE user_id = ? AND contribution > 0 AND settlement_claimed = 0 AND week_id < ?
+               ORDER BY week_id DESC""",
+            (user_id, current_week_id),
         ).fetchall()
     return [dict(row) for row in rows]
 

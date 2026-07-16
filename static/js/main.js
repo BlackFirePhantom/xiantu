@@ -12,6 +12,7 @@ function showSecretRealm() {
 
 function exploreSecretRealm() { socket.emit("secret_realm_explore"); }
 function challengeSecretRealm() { socket.emit("secret_realm_challenge"); }
+function claimSecretRealmSettlement(weekId) { socket.emit("claim_secret_realm_settlement", { week_id: weekId }); }
 
 function sendChat() {
     const input = document.getElementById("chat-input");

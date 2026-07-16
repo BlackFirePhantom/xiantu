@@ -76,3 +76,40 @@ def test_secret_realm_records_are_isolated_by_week_and_share_one_boss(tmp_path, 
     assert next_week_run == {"explorations": 0, "contribution": 0, "boss_damage": 0}
     assert first_boss["hp"] == BOSS_MAX_HP
     assert same_week_boss["hp"] == 321
+
+
+def test_atomic_boss_settlement_awards_the_kill_once(tmp_path, monkeypatch):
+    monkeypatch.setattr(models, "DB_PATH", str(tmp_path / "realm.db"))
+    models.init_db()
+    with models.get_db() as conn:
+        conn.execute("INSERT INTO users (id, username, password_hash) VALUES (1, 'tester', 'unused')")
+        conn.execute("INSERT INTO characters (user_id, name) VALUES (1, 'tester')")
+
+    first = models.apply_secret_realm_boss_damage(1, "2026-W29", 60)
+    finishing = models.apply_secret_realm_boss_damage(1, "2026-W29", 600)
+    duplicate = models.apply_secret_realm_boss_damage(1, "2026-W29", 10)
+    character = models.get_character(1)
+
+    assert first == {"ok": True, "damage": 60, "boss_hp": 440, "defeated": False, "reward_granted": False}
+    assert finishing == {"ok": True, "damage": 440, "boss_hp": 0, "defeated": True, "reward_granted": True}
+    assert duplicate == {"ok": False, "reason": "boss_defeated"}
+    assert character["sect_contrib"] == 500
+    assert models.get_character_inventory(1)["chiyan_jing"] == 1
+
+
+def test_weekly_settlement_rewards_rank_and_can_only_be_claimed_once(tmp_path, monkeypatch):
+    monkeypatch.setattr(models, "DB_PATH", str(tmp_path / "realm.db"))
+    models.init_db()
+    with models.get_db() as conn:
+        for user_id, name in ((1, "first"), (2, "second")):
+            conn.execute("INSERT INTO users (id, username, password_hash) VALUES (?, ?, 'unused')", (user_id, name))
+            conn.execute("INSERT INTO characters (user_id, name) VALUES (?, ?)", (user_id, name))
+    models.save_secret_realm_run(1, "2026-W28", explorations=3, contribution=80, boss_damage=70)
+    models.save_secret_realm_run(2, "2026-W28", explorations=3, contribution=30, boss_damage=20)
+
+    result = models.claim_secret_realm_settlement(2, "2026-W28")
+    duplicate = models.claim_secret_realm_settlement(2, "2026-W28")
+
+    assert result == {"ok": True, "week_id": "2026-W28", "rank": 2, "gold_reward": 50}
+    assert duplicate == {"ok": False, "reason": "already_claimed"}
+    assert models.get_character(2)["gold"] == 100
