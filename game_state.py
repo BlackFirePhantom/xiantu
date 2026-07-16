@@ -49,6 +49,25 @@ def get_cached_character(user_id):
             return char_dict
         return None
 
+
+def refresh_cached_character(user_id):
+    """Replace a cached character with its current database row.
+
+    Use this after an atomic model operation that updates character fields
+    directly, so later state payloads cannot overwrite or expose stale data.
+    """
+    row = models.get_character(user_id)
+    with cache_lock:
+        if not row:
+            character_cache.pop(user_id, None)
+            dirty_users.discard(user_id)
+            return None
+
+        char_dict = dict(row)
+        character_cache[user_id] = char_dict
+        dirty_users.discard(user_id)
+        return char_dict
+
 def update_cached_character(user_id, **kwargs):
     """更新角色缓存，并将 user_id 标记为脏数据。"""
     if not kwargs:

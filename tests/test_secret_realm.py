@@ -6,6 +6,7 @@ from game.secret_realm import (
     new_run,
 )
 import models
+import game_state
 
 
 def test_exploration_grants_progress_gold_and_contribution():
@@ -113,3 +114,29 @@ def test_weekly_settlement_rewards_rank_and_can_only_be_claimed_once(tmp_path, m
     assert result == {"ok": True, "week_id": "2026-W28", "rank": 2, "gold_reward": 50}
     assert duplicate == {"ok": False, "reason": "already_claimed"}
     assert models.get_character(2)["gold"] == 100
+
+
+def test_refresh_cached_character_reflects_atomic_settlement_changes(tmp_path, monkeypatch):
+    monkeypatch.setattr(models, "DB_PATH", str(tmp_path / "realm.db"))
+    models.init_db()
+    with models.get_db() as conn:
+        conn.execute("INSERT INTO users (id, username, password_hash) VALUES (1, 'tester', 'unused')")
+        conn.execute("INSERT INTO characters (user_id, name) VALUES (1, 'tester')")
+    models.save_secret_realm_run(1, "2026-W28", explorations=3, contribution=80, boss_damage=70)
+
+    with game_state.cache_lock:
+        game_state.character_cache.clear()
+        game_state.dirty_users.clear()
+    try:
+        assert game_state.get_cached_character(1)["gold"] == 50
+        assert models.claim_secret_realm_settlement(1, "2026-W28")["ok"] is True
+
+        refreshed = game_state.refresh_cached_character(1)
+
+        assert refreshed["gold"] == 120
+        assert game_state.get_cached_character(1)["gold"] == 120
+        assert 1 not in game_state.dirty_users
+    finally:
+        with game_state.cache_lock:
+            game_state.character_cache.clear()
+            game_state.dirty_users.clear()
