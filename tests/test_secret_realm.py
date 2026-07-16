@@ -5,6 +5,7 @@ from game.secret_realm import (
     explore,
     new_run,
 )
+import models
 
 
 def test_exploration_grants_progress_gold_and_contribution():
@@ -50,3 +51,28 @@ def test_boss_damage_becomes_contribution_and_defeat_rewards_crystal():
     assert result["defeated"] is True
     assert result["reward_item"] == "chiyan_jing"
     assert result["run"]["contribution"] == 55
+
+
+def test_secret_realm_records_are_isolated_by_week_and_share_one_boss(tmp_path, monkeypatch):
+    monkeypatch.setattr(models, "DB_PATH", str(tmp_path / "realm.db"))
+    models.init_db()
+    with models.get_db() as conn:
+        conn.execute(
+            "INSERT INTO users (id, username, password_hash) VALUES (?, ?, ?)",
+            (7, "realm_tester", "unused"),
+        )
+
+    first_run = models.get_secret_realm_run(7, "2026-W29")
+    models.save_secret_realm_run(7, "2026-W29", explorations=3, contribution=50, boss_damage=35)
+    same_week_run = models.get_secret_realm_run(7, "2026-W29")
+    next_week_run = models.get_secret_realm_run(7, "2026-W30")
+
+    first_boss = models.get_secret_realm_boss("2026-W29")
+    models.save_secret_realm_boss("2026-W29", hp=321)
+    same_week_boss = models.get_secret_realm_boss("2026-W29")
+
+    assert first_run == {"explorations": 0, "contribution": 0, "boss_damage": 0}
+    assert same_week_run == {"explorations": 3, "contribution": 50, "boss_damage": 35}
+    assert next_week_run == {"explorations": 0, "contribution": 0, "boss_damage": 0}
+    assert first_boss["hp"] == BOSS_MAX_HP
+    assert same_week_boss["hp"] == 321

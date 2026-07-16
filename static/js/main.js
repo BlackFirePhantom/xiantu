@@ -5,6 +5,13 @@
 function doFight() { socket.emit("fight"); }
 function doMeditate() { socket.emit("meditate"); }
 function doBreakthrough() { socket.emit("breakthrough"); }
+function showSecretRealm() {
+    document.getElementById("secret-realm-modal").style.display = "flex";
+    socket.emit("get_secret_realm");
+}
+
+function exploreSecretRealm() { socket.emit("secret_realm_explore"); }
+function challengeSecretRealm() { socket.emit("secret_realm_challenge"); }
 
 function sendChat() {
     const input = document.getElementById("chat-input");

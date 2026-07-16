@@ -103,6 +103,22 @@ def init_db():
             CREATE TABLE IF NOT EXISTS schema_version (
                 version INTEGER PRIMARY KEY
             );
+
+            CREATE TABLE IF NOT EXISTS secret_realm_runs (
+                week_id TEXT NOT NULL,
+                user_id INTEGER NOT NULL,
+                explorations INTEGER NOT NULL DEFAULT 0,
+                contribution INTEGER NOT NULL DEFAULT 0,
+                boss_damage INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (week_id, user_id),
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS secret_realm_bosses (
+                week_id TEXT PRIMARY KEY,
+                hp INTEGER NOT NULL,
+                max_hp INTEGER NOT NULL
+            );
         """)
 
         # 获取当前版本
@@ -158,6 +174,66 @@ def update_character(user_id, **kwargs):
     values = list(kwargs.values()) + [user_id]
     with get_db() as conn:
         conn.execute(f"UPDATE characters SET {set_clause} WHERE user_id = ?", values)
+
+
+def get_secret_realm_run(user_id, week_id):
+    """Return a player's progress for one realm rotation, creating it if needed."""
+    with get_db() as conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO secret_realm_runs (week_id, user_id) VALUES (?, ?)",
+            (week_id, user_id),
+        )
+        row = conn.execute(
+            "SELECT explorations, contribution, boss_damage FROM secret_realm_runs "
+            "WHERE week_id = ? AND user_id = ?",
+            (week_id, user_id),
+        ).fetchone()
+    return dict(row)
+
+
+def save_secret_realm_run(user_id, week_id, *, explorations, contribution, boss_damage):
+    with get_db() as conn:
+        conn.execute(
+            """INSERT INTO secret_realm_runs (week_id, user_id, explorations, contribution, boss_damage)
+               VALUES (?, ?, ?, ?, ?)
+               ON CONFLICT(week_id, user_id) DO UPDATE SET
+                   explorations = excluded.explorations,
+                   contribution = excluded.contribution,
+                   boss_damage = excluded.boss_damage""",
+            (week_id, user_id, explorations, contribution, boss_damage),
+        )
+
+
+def get_secret_realm_boss(week_id, max_hp=500):
+    """Return the shared realm boss, creating the week's boss on first access."""
+    with get_db() as conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO secret_realm_bosses (week_id, hp, max_hp) VALUES (?, ?, ?)",
+            (week_id, max_hp, max_hp),
+        )
+        row = conn.execute(
+            "SELECT hp, max_hp FROM secret_realm_bosses WHERE week_id = ?", (week_id,)
+        ).fetchone()
+    return dict(row)
+
+
+def save_secret_realm_boss(week_id, *, hp):
+    with get_db() as conn:
+        conn.execute("UPDATE secret_realm_bosses SET hp = ? WHERE week_id = ?", (hp, week_id))
+
+
+def get_secret_realm_leaderboard(week_id, limit=10):
+    with get_db() as conn:
+        rows = conn.execute(
+            """SELECT c.name, r.contribution, r.boss_damage
+               FROM secret_realm_runs r
+               JOIN characters c ON c.user_id = r.user_id
+               WHERE r.week_id = ?
+               ORDER BY r.contribution DESC, r.boss_damage DESC, c.name ASC
+               LIMIT ?""",
+            (week_id, limit),
+        ).fetchall()
+    return [dict(row) for row in rows]
 
 
 def get_character_inventory(user_id):

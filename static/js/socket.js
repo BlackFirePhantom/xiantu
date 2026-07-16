@@ -32,6 +32,7 @@ socket.on("system_msg", (data) => addLog(data.text, "system"));
 socket.on("player_moved", (data) => addLog(`${data.player} 御剑前往了 ${data.to_name}`, "player-move"));
 socket.on("chat_msg", (data) => addChat(data.from, data.text));
 socket.on("leaderboard", (data) => renderLeaderboard(data.data));
+socket.on("secret_realm_state", (data) => renderSecretRealm(data));
 socket.on("techniques_list", (data) => renderTechniques(data));
 socket.on("meridians_list", (data) => renderMeridians(data));
 socket.on("forge_recipes", (data) => renderForgePanel(data));
