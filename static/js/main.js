@@ -5,6 +5,7 @@
 function doFight() { socket.emit("fight"); }
 function doMeditate() { socket.emit("meditate"); }
 function doBreakthrough() { socket.emit("breakthrough"); }
+let secretRealmChallengePending = false;
 function showSecretRealm() {
     document.getElementById("secret-realm-modal").style.display = "flex";
     socket.emit("get_secret_realm");
@@ -15,7 +16,16 @@ function showSectBoss() {
 }
 
 function exploreSecretRealm() { socket.emit("secret_realm_explore"); }
-function challengeSecretRealm() { socket.emit("secret_realm_challenge"); }
+function challengeSecretRealm() {
+    if (secretRealmChallengePending) return;
+    secretRealmChallengePending = true;
+    const button = document.getElementById("secret-realm-challenge-button");
+    if (button) {
+        button.disabled = true;
+        button.textContent = "正在交锋…";
+    }
+    socket.emit("secret_realm_challenge");
+}
 function claimSecretRealmSettlement(weekId) { socket.emit("claim_secret_realm_settlement", { week_id: weekId }); }
 function challengeSectBoss() { socket.emit("sect_boss_challenge"); }
 

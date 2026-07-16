@@ -96,7 +96,7 @@
                 <button class="btn btn-pet" onclick="showPanel('pets')">灵宠</button>
                 <button class="btn btn-auction" onclick="showAuction()">拍卖行</button>
                 <button class="btn btn-leaderboard" onclick="showLeaderboard()">天骄榜 <span class="shortcut-hint">L</span></button>
-                <button class="btn btn-fight" onclick="showSecretRealm()">赤焰秘境</button>
+                  <button class="btn btn-fight" onclick="showSecretRealm()">轮回秘境</button>
                 <button class="btn btn-fight" onclick="showSectBoss()">宗门首领</button>
             </div>
 
@@ -183,10 +183,10 @@
     </div>
 
     <div id="secret-realm-modal" class="modal" role="dialog" aria-modal="true" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
-        <div class="modal-content">
+        <div class="modal-content secret-realm-modal-content">
             <span class="modal-close" onclick="this.closest('.modal').style.display='none'">&times;</span>
-            <h3>赤焰秘境</h3>
-            <div id="secret-realm-body"></div>
+            <h3>轮回秘境</h3>
+            <div id="secret-realm-body" aria-live="polite"></div>
         </div>
     </div>
 

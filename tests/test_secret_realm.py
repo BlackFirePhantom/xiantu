@@ -1,8 +1,10 @@
 from game.secret_realm import (
     BOSS_MAX_HP,
     EXPLORATION_LIMIT,
+    WEEKLY_BOSSES,
     challenge_boss,
     explore,
+    get_weekly_boss,
     new_run,
 )
 import models
@@ -19,7 +21,7 @@ def test_exploration_grants_progress_gold_and_contribution():
     assert result["boss_unlocked"] is False
 
 
-def test_third_exploration_unlocks_the_realm_boss():
+def test_third_exploration_uses_the_last_realm_entry():
     run = new_run(explorations=EXPLORATION_LIMIT - 1)
 
     result = explore(run, roll=0)
@@ -35,14 +37,14 @@ def test_exploration_limit_prevents_extra_rewards():
     assert result == {"ok": False, "reason": "exploration_limit"}
 
 
-def test_boss_requires_the_exploration_gate():
-    result = challenge_boss(new_run(), boss_hp=BOSS_MAX_HP, damage=50)
+def test_boss_requires_a_remaining_realm_entry():
+    result = challenge_boss(new_run(explorations=EXPLORATION_LIMIT), boss_hp=BOSS_MAX_HP, damage=50)
 
-    assert result == {"ok": False, "reason": "boss_locked"}
+    assert result == {"ok": False, "reason": "no_entries"}
 
 
-def test_boss_damage_becomes_contribution_and_defeat_rewards_crystal():
-    run = new_run(explorations=EXPLORATION_LIMIT, contribution=15)
+def test_boss_damage_consumes_an_entry_and_defeat_rewards_crystal():
+    run = new_run(contribution=15)
 
     result = challenge_boss(run, boss_hp=40, damage=50)
 
@@ -52,6 +54,106 @@ def test_boss_damage_becomes_contribution_and_defeat_rewards_crystal():
     assert result["defeated"] is True
     assert result["reward_item"] == "chiyan_jing"
     assert result["run"]["contribution"] == 55
+    assert result["run"]["explorations"] == 1
+
+
+def test_weekly_boss_rotation_is_stable_and_exposes_multiple_bosses():
+    first_week = get_weekly_boss("2026-W01")
+
+    assert first_week == get_weekly_boss("2026-W01")
+    assert {get_weekly_boss(f"2026-W{week:02d}")["id"] for week in range(1, 9)} == {
+        boss["id"] for boss in WEEKLY_BOSSES
+    }
+    assert {"name", "description", "max_hp", "attack"} <= first_week.keys()
+
+
+def test_boss_encounter_consumes_an_entry_and_returns_counterattack_damage(tmp_path, monkeypatch):
+    monkeypatch.setattr(models, "DB_PATH", str(tmp_path / "realm_encounter.db"))
+    models.init_db()
+    with models.get_db() as conn:
+        conn.execute("INSERT INTO users (id, username, password_hash) VALUES (1, 'tester', 'unused')")
+        conn.execute(
+            "INSERT INTO characters (user_id, name, hp, max_hp, location) VALUES (1, 'tester', 100, 100, 'chiyan_forest')"
+        )
+
+    result = models.resolve_secret_realm_boss_encounter(
+        1, "2026-W29", player_damage=40, player_defense=5, boss_attack=25, max_hp=100, entry_limit=3
+    )
+
+    assert result["ok"] is True
+    assert result["damage"] == 40
+    assert result["boss_hp"] == 60
+    assert result["player_damage"] == 20
+    assert result["player_hp"] == 80
+    assert result["entries_remaining"] == 2
+    assert models.get_secret_realm_run(1, "2026-W29")["explorations"] == 1
+    assert models.get_character(1)["hp"] == 80
+
+
+def test_boss_death_returns_to_safety_and_exhausted_entries_block_entry(tmp_path, monkeypatch):
+    monkeypatch.setattr(models, "DB_PATH", str(tmp_path / "realm_death.db"))
+    models.init_db()
+    with models.get_db() as conn:
+        conn.execute("INSERT INTO users (id, username, password_hash) VALUES (1, 'tester', 'unused')")
+        conn.execute(
+            "INSERT INTO characters (user_id, name, hp, max_hp, location) VALUES (1, 'tester', 10, 100, 'chiyan_forest')"
+        )
+
+    death = models.resolve_secret_realm_boss_encounter(
+        1, "2026-W29", player_damage=10, player_defense=0, boss_attack=30, max_hp=100, entry_limit=3
+    )
+    character = models.get_character(1)
+    models.save_secret_realm_run(1, "2026-W29", explorations=3, contribution=10, boss_damage=10)
+    blocked = models.resolve_secret_realm_boss_encounter(
+        1, "2026-W29", player_damage=10, player_defense=0, boss_attack=30, max_hp=100, entry_limit=3
+    )
+
+    assert death["player_died"] is True
+    assert death["entries_remaining"] == 2
+    assert character["hp"] == 50
+    assert character["deaths"] == 1
+    assert character["location"] == "qingyun_town"
+    assert blocked == {"ok": False, "reason": "no_entries"}
+
+
+def test_secret_realm_socket_state_shows_player_hp_and_consumes_entry(tmp_path, monkeypatch):
+    monkeypatch.setattr(models, "DB_PATH", str(tmp_path / "realm_socket.db"))
+    models.init_db()
+    with models.get_db() as conn:
+        conn.execute("INSERT INTO users (id, username, password_hash) VALUES (1, 'tester', 'unused')")
+        conn.execute(
+            "INSERT INTO characters (user_id, name, hp, max_hp, location) VALUES (1, 'tester', 100, 100, 'chiyan_forest')"
+        )
+    with game_state.cache_lock:
+        game_state.character_cache.clear()
+        game_state.dirty_users.clear()
+
+    import handlers.secret_realm as realm_handlers
+    monkeypatch.setattr(realm_handlers, "_week_id", lambda: "2026-W29")
+    from app import app, socketio
+
+    try:
+        flask_client = app.test_client()
+        with flask_client.session_transaction() as session:
+            session["user_id"] = 1
+            session["username"] = "tester"
+        client = socketio.test_client(app, flask_test_client=flask_client)
+        client.emit("get_secret_realm")
+        initial = [event["args"][0] for event in client.get_received() if event["name"] == "secret_realm_state"][0]
+
+        client.emit("secret_realm_challenge")
+        updated = [event["args"][0] for event in client.get_received() if event["name"] == "secret_realm_state"][-1]
+
+        assert initial["boss"]["name"] == get_weekly_boss("2026-W29")["name"]
+        assert initial["player"] == {"hp": 100, "max_hp": 100}
+        assert initial["entries_remaining"] == EXPLORATION_LIMIT
+        assert updated["entries_remaining"] == EXPLORATION_LIMIT - 1
+        assert updated["player"]["hp"] < initial["player"]["hp"]
+        client.disconnect()
+    finally:
+        with game_state.cache_lock:
+            game_state.character_cache.clear()
+            game_state.dirty_users.clear()
 
 
 def test_secret_realm_records_are_isolated_by_week_and_share_one_boss(tmp_path, monkeypatch):

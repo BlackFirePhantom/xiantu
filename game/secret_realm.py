@@ -4,6 +4,46 @@ EXPLORATION_LIMIT = 3
 BOSS_MAX_HP = 500
 EXPLORATION_CONTRIBUTION = 5
 
+WEEKLY_BOSSES = (
+    {
+        "id": "chiyan_mojun",
+        "name": "赤焰魔君",
+        "description": "熔岩之火焚尽山谷，擅长持续猛攻。",
+        "max_hp": 500,
+        "attack": 24,
+    },
+    {
+        "id": "xuanbing_yaohou",
+        "name": "玄冰妖后",
+        "description": "寒雾笼罩秘境，每一次反击都凛冽刺骨。",
+        "max_hp": 560,
+        "attack": 20,
+    },
+    {
+        "id": "leiming_juyuan",
+        "name": "雷鸣巨猿",
+        "description": "雷霆震荡群山，厚重身躯难以撼动。",
+        "max_hp": 640,
+        "attack": 28,
+    },
+    {
+        "id": "youming_guwang",
+        "name": "幽冥骨王",
+        "description": "冥火不熄，白骨王座前唯有死战。",
+        "max_hp": 580,
+        "attack": 32,
+    },
+)
+
+
+def get_weekly_boss(week_id):
+    """Return the deterministic boss configuration for a weekly realm rotation."""
+    try:
+        week_number = int(week_id.rsplit("W", 1)[1])
+    except (IndexError, ValueError):
+        week_number = sum(map(ord, week_id))
+    return dict(WEEKLY_BOSSES[(week_number - 1) % len(WEEKLY_BOSSES)])
+
 SEASON_MODIFIERS = (
     {
         "id": "spirit_tide",
@@ -66,14 +106,15 @@ def explore(run, roll, *, gold_bonus=0, contribution_bonus=0):
 
 
 def challenge_boss(run, boss_hp, damage):
-    """Apply one player's damage to the shared boss after the exploration gate."""
-    if run["explorations"] < EXPLORATION_LIMIT:
-        return {"ok": False, "reason": "boss_locked"}
+    """Apply one boss encounter while a player has a realm entry remaining."""
+    if run["explorations"] >= EXPLORATION_LIMIT:
+        return {"ok": False, "reason": "no_entries"}
     if boss_hp <= 0:
         return {"ok": False, "reason": "boss_defeated"}
 
     dealt = min(max(1, damage), boss_hp)
     updated_run = dict(run)
+    updated_run["explorations"] += 1
     updated_run["boss_damage"] += dealt
     updated_run["contribution"] += dealt
     remaining_hp = boss_hp - dealt

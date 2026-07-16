@@ -7,16 +7,16 @@ from flask import session
 from flask_socketio import emit
 
 import game_state
-from game.secret_realm import BOSS_MAX_HP, EXPLORATION_LIMIT, explore, get_season_modifier
+from game.secret_realm import EXPLORATION_LIMIT, explore, get_season_modifier, get_weekly_boss
 from game.utils import get_full_stats
 from models import (
-    apply_secret_realm_boss_damage,
+    claim_secret_realm_settlement,
+    get_character_titles,
+    get_pending_secret_realm_settlements,
     get_secret_realm_boss,
     get_secret_realm_leaderboard,
     get_secret_realm_run,
-    get_pending_secret_realm_settlements,
-    claim_secret_realm_settlement,
-    get_character_titles,
+    resolve_secret_realm_boss_encounter,
     save_secret_realm_run,
 )
 from .base import do_get_state
@@ -30,19 +30,24 @@ def _week_id(today=None):
 def _state_for(user_id):
     week_id = _week_id()
     run = get_secret_realm_run(user_id, week_id)
-    boss = get_secret_realm_boss(week_id, max_hp=BOSS_MAX_HP)
-    season = get_season_modifier(week_id)
+    boss_config = get_weekly_boss(week_id)
+    boss = get_secret_realm_boss(week_id, max_hp=boss_config["max_hp"])
+    boss.update(boss_config)
+    char = game_state.get_cached_character(user_id)
+    stats = get_full_stats(char) if char else {"max_hp": 0}
     return {
         "week_id": week_id,
-        "name": "赤焰秘境",
+        "name": "轮回秘境",
         "explorations": run["explorations"],
-        "exploration_limit": 3,
+        "exploration_limit": EXPLORATION_LIMIT,
+        "entries_remaining": max(0, EXPLORATION_LIMIT - run["explorations"]),
         "contribution": run["contribution"],
         "boss_damage": run["boss_damage"],
         "boss": boss,
+        "player": {"hp": char["hp"], "max_hp": stats["max_hp"]} if char else None,
         "leaderboard": get_secret_realm_leaderboard(week_id),
         "pending_settlements": get_pending_secret_realm_settlements(user_id, week_id),
-        "season": season,
+        "season": get_season_modifier(week_id),
         "titles": get_character_titles(user_id),
     }
 
@@ -76,7 +81,8 @@ def register_secret_realm_handlers(socketio):
             contribution_bonus=season["contribution_bonus"],
         )
         if not result["ok"]:
-            emit("game_msg", {"text": "本周秘境探索次数已耗尽。", "type": "error"})
+            emit("game_msg", {"text": "本周秘境入场次数已耗尽。", "type": "error"})
+            _emit_state(user_id)
             return
 
         run = result["run"]
@@ -86,9 +92,8 @@ def register_secret_realm_handlers(socketio):
             gold=result["gold_gain"],
             sect_contrib=result["contribution_gain"],
         )
-        suffix = "秘境深处的赤焰魔君已现身！" if result["boss_unlocked"] else ""
         emit("game_msg", {
-            "text": f"秘境探索成功，获得 {result['gold_gain']} 灵石与 {result['contribution_gain']} 秘境贡献。{suffix}",
+            "text": f"秘境探索成功，获得 {result['gold_gain']} 灵石与 {result['contribution_gain']} 秘境贡献。",
             "type": "shop",
         })
         _emit_state(user_id)
@@ -108,7 +113,10 @@ def register_secret_realm_handlers(socketio):
         if not result["ok"]:
             emit("game_msg", {"text": "该周没有可领取的秘境奖励。", "type": "error"})
             return
-        emit("game_msg", {"text": f"领取 {week_id} 秘境结算：第 {result['rank']} 名，获得 {result['gold_reward']} 灵石。", "type": "shop"})
+        emit("game_msg", {
+            "text": f"领取 {week_id} 秘境结算：第 {result['rank']} 名，获得 {result['gold_reward']} 灵石。",
+            "type": "shop",
+        })
         game_state.refresh_cached_character(user_id)
         _emit_state(user_id)
         do_get_state(user_id)
@@ -124,23 +132,41 @@ def register_secret_realm_handlers(socketio):
         game_state.touch_activity(session.get("username", ""))
 
         week_id = _week_id()
+        boss_config = get_weekly_boss(week_id)
         season = get_season_modifier(week_id)
-        damage = max(1, round(get_full_stats(char)["atk"] * 3 * season["boss_damage_multiplier"]))
-        run = get_secret_realm_run(user_id, week_id)
-        if run["explorations"] < EXPLORATION_LIMIT:
-            emit("game_msg", {"text": "完成三次秘境探索后，才能挑战首领。", "type": "error"})
-            return
-
+        stats = get_full_stats(char)
+        damage = max(1, round(stats["atk"] * 3 * season["boss_damage_multiplier"]))
         game_state.save_cached_character(user_id)
-        result = apply_secret_realm_boss_damage(user_id, week_id, damage, BOSS_MAX_HP)
+        result = resolve_secret_realm_boss_encounter(
+            user_id,
+            week_id,
+            player_damage=damage,
+            player_defense=stats["def"],
+            boss_attack=boss_config["attack"],
+            max_hp=boss_config["max_hp"],
+            entry_limit=EXPLORATION_LIMIT,
+        )
         if not result["ok"]:
-            emit("game_msg", {"text": "赤焰魔君已经被击败，静待下周秘境重开。", "type": "error"})
+            messages = {
+                "no_entries": "本周秘境入场次数已耗尽，无法继续挑战首领。",
+                "boss_defeated": f"{boss_config['name']}已经被击败，静待下周秘境重开。",
+            }
+            emit("game_msg", {"text": messages.get(result["reason"], "秘境挑战暂不可用。"), "type": "error"})
+            _emit_state(user_id)
             return
 
         game_state.refresh_cached_character(user_id)
-        if result["reward_granted"]:
-            emit("game_msg", {"text": "赤焰魔君伏诛！你获得限定素材【赤炎晶】。", "type": "buff"})
+        if result["player_died"]:
+            emit("game_msg", {
+                "text": f"{boss_config['name']}反击造成 {result['player_damage']} 点伤害。你已陨落并被传送回青云镇，入场次数已消耗。",
+                "type": "error",
+            })
+        elif result["reward_granted"]:
+            emit("game_msg", {"text": f"{boss_config['name']}伏诛！你获得限定素材【赤焰晶】。", "type": "buff"})
         else:
-            emit("game_msg", {"text": f"你对赤焰魔君造成 {result['damage']} 点伤害。", "type": "fight"})
+            emit("game_msg", {
+                "text": f"你对{boss_config['name']}造成 {result['damage']} 点伤害，承受反击 {result['player_damage']} 点伤害。",
+                "type": "fight",
+            })
         _emit_state(user_id)
         do_get_state(user_id)

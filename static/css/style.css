@@ -894,6 +894,27 @@ a:focus-visible {
 .sect-boss-player { overflow: hidden; color: var(--text-primary); text-overflow: ellipsis; white-space: nowrap; }
 .sect-boss-damage { color: #e9b56d; font-size: 12px; font-weight: 500; }
 .sect-boss-empty { margin: 0; padding: 16px; border: 1px dashed rgba(201, 157, 119, 0.35); color: var(--text-secondary); font-size: 12px; text-align: center; }
+
+/* ===== 轮回秘境 ===== */
+.secret-realm-modal-content { width: min(590px, calc(100vw - 32px)); max-height: min(800px, calc(100vh - 48px)); overflow-y: auto; }
+.secret-realm-arena { padding: 18px; border: 1px solid rgba(126, 184, 218, 0.35); border-radius: 12px; background: linear-gradient(145deg, rgba(28, 52, 67, 0.72), rgba(16, 23, 31, 0.98)); }
+.secret-realm-eyebrow { margin: 0 0 6px; color: #8fc5df; font-size: 11px; letter-spacing: .08em; }
+.secret-realm-boss-name { margin: 0; color: #d9f0ff; font-family: var(--font-serif); font-size: 24px; }
+.secret-realm-boss-description { margin: 5px 0 16px; color: var(--text-secondary); font-size: 12px; }
+.secret-realm-health-block { margin-top: 12px; }
+.secret-realm-health-block.player { margin-top: 14px; }
+.secret-realm-health-labels { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 6px; color: #c8d7df; font-size: 12px; }
+.secret-realm-health-labels strong { color: #f4e8cf; font-family: var(--font-mono); }
+.secret-realm-health-track { height: 10px; overflow: hidden; border: 1px solid rgba(201, 222, 235, .28); border-radius: 999px; background: #10161c; }
+.secret-realm-health-fill { height: 100%; border-radius: inherit; transition: width 260ms ease; }
+.secret-realm-health-fill.boss { background: linear-gradient(90deg, #c4565b, #e49162); box-shadow: 0 0 12px rgba(228, 145, 98, .45); }
+.secret-realm-health-fill.player { background: linear-gradient(90deg, #4b9f89, #9bcf9b); box-shadow: 0 0 12px rgba(104, 204, 166, .34); }
+.secret-realm-entry-info { margin-top: 15px; padding: 8px 10px; border: 1px solid rgba(201, 157, 119, .2); border-radius: 6px; color: #dfc28a; background: rgba(98, 75, 23, .14); font-size: 12px; }
+.secret-realm-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+.secret-realm-actions .btn { min-height: 40px; }
+.secret-realm-actions .btn:disabled { cursor: not-allowed; opacity: .48; filter: saturate(.55); }
+.secret-realm-season { margin: 12px 0; }
+@media (max-width: 520px) { .secret-realm-actions { grid-template-columns: 1fr; } }
 .divider { 
     border: none; 
     border-top: 1px solid rgba(63, 167, 117, 0.1); 

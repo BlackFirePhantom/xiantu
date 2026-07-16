@@ -292,6 +292,84 @@ def apply_secret_realm_boss_damage(user_id, week_id, requested_damage, max_hp=50
     }
 
 
+def resolve_secret_realm_boss_encounter(
+    user_id, week_id, *, player_damage, player_defense, boss_attack, max_hp, entry_limit
+):
+    """Atomically resolve one paid realm-boss encounter and its counterattack."""
+    with get_db() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        conn.execute(
+            "INSERT OR IGNORE INTO secret_realm_bosses (week_id, hp, max_hp) VALUES (?, ?, ?)",
+            (week_id, max_hp, max_hp),
+        )
+        conn.execute(
+            "INSERT OR IGNORE INTO secret_realm_runs (week_id, user_id) VALUES (?, ?)",
+            (week_id, user_id),
+        )
+        run = conn.execute(
+            "SELECT explorations FROM secret_realm_runs WHERE week_id = ? AND user_id = ?",
+            (week_id, user_id),
+        ).fetchone()
+        if run["explorations"] >= entry_limit:
+            return {"ok": False, "reason": "no_entries"}
+
+        boss = conn.execute(
+            "SELECT hp FROM secret_realm_bosses WHERE week_id = ?", (week_id,)
+        ).fetchone()
+        if boss["hp"] <= 0:
+            return {"ok": False, "reason": "boss_defeated"}
+
+        char = conn.execute(
+            "SELECT hp, max_hp, deaths, location, sect_contrib, inventory FROM characters WHERE user_id = ?", (user_id,)
+        ).fetchone()
+        if not char:
+            return {"ok": False, "reason": "character_missing"}
+
+        damage = min(max(1, int(player_damage)), boss["hp"])
+        remaining_hp = boss["hp"] - damage
+        defeated = remaining_hp == 0
+        counter_damage = 0 if defeated else max(1, int(boss_attack) - int(player_defense))
+        player_hp = max(0, char["hp"] - counter_damage)
+        player_died = player_hp == 0
+        restored_hp = max(1, char["max_hp"] // 2) if player_died else player_hp
+        inventory = json.loads(char["inventory"]) if char["inventory"] else {}
+        if defeated:
+            inventory["chiyan_jing"] = inventory.get("chiyan_jing", 0) + 1
+
+        conn.execute("UPDATE secret_realm_bosses SET hp = ? WHERE week_id = ?", (remaining_hp, week_id))
+        conn.execute(
+            """UPDATE secret_realm_runs
+               SET explorations = explorations + 1, contribution = contribution + ?, boss_damage = boss_damage + ?
+               WHERE week_id = ? AND user_id = ?""",
+            (damage, damage, week_id, user_id),
+        )
+        conn.execute(
+            """UPDATE characters
+               SET hp = ?, deaths = ?, location = ?, sect_contrib = ?, inventory = ?
+               WHERE user_id = ?""",
+            (
+                restored_hp,
+                char["deaths"] + int(player_died),
+                "qingyun_town" if player_died else char["location"],
+                char["sect_contrib"] + damage,
+                json.dumps(inventory),
+                user_id,
+            ),
+        )
+
+    return {
+        "ok": True,
+        "damage": damage,
+        "boss_hp": remaining_hp,
+        "defeated": defeated,
+        "reward_granted": defeated,
+        "player_damage": counter_damage,
+        "player_hp": restored_hp,
+        "player_died": player_died,
+        "entries_remaining": entry_limit - run["explorations"] - 1,
+    }
+
+
 def get_secret_realm_leaderboard(week_id, limit=10):
     with get_db() as conn:
         rows = conn.execute(

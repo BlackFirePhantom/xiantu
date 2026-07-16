@@ -146,34 +146,101 @@ function renderSecretRealm(data) {
     const body = document.getElementById("secret-realm-body");
     body.replaceChildren();
 
-    const summary = document.createElement("p");
-    summary.textContent = `本周 ${data.week_id}｜探索 ${data.explorations}/${data.exploration_limit}｜个人贡献 ${data.contribution}`;
-    body.appendChild(summary);
+    const boss = data.boss;
+    const player = data.player || { hp: 0, max_hp: 0 };
+    const hpPct = boss.max_hp ? Math.max(0, Math.round(boss.hp / boss.max_hp * 100)) : 0;
+    const playerHpPct = player.max_hp ? Math.max(0, Math.round(player.hp / player.max_hp * 100)) : 0;
+    const entriesRemaining = data.entries_remaining ?? Math.max(0, data.exploration_limit - data.explorations);
+    const isDefeated = boss.hp <= 0;
 
-    if (data.season) {
-        const season = document.createElement("p");
-        season.className = "forge-hint";
-        season.textContent = `赛季词缀：${data.season.name}｜${data.season.description}`;
-        body.appendChild(season);
-    }
+    const arena = document.createElement("section");
+    arena.className = "secret-realm-arena";
+    const eyebrow = document.createElement("p");
+    eyebrow.className = "secret-realm-eyebrow";
+    eyebrow.textContent = `${data.week_id} · 本周轮换首领`;
+    const name = document.createElement("h4");
+    name.className = "secret-realm-boss-name";
+    name.textContent = boss.name || data.name;
+    const description = document.createElement("p");
+    description.className = "secret-realm-boss-description";
+    description.textContent = boss.description || "秘境深处，首领正在等待挑战。";
+    arena.append(eyebrow, name, description);
 
-    const boss = document.createElement("p");
-    boss.textContent = `赤焰魔君：${data.boss.hp} / ${data.boss.max_hp} 气血｜你的伤害 ${data.boss_damage}`;
-    body.appendChild(boss);
+    const bossHealth = document.createElement("div");
+    bossHealth.className = "secret-realm-health-block";
+    const bossLabels = document.createElement("div");
+    bossLabels.className = "secret-realm-health-labels";
+    const bossLabel = document.createElement("span");
+    bossLabel.textContent = "首领气血";
+    bossLabels.appendChild(bossLabel);
+    const bossValue = document.createElement("strong");
+    bossValue.textContent = `${boss.hp} / ${boss.max_hp}`;
+    bossLabels.appendChild(bossValue);
+    const bossTrack = document.createElement("div");
+    bossTrack.className = "secret-realm-health-track boss";
+    bossTrack.setAttribute("role", "progressbar");
+    bossTrack.setAttribute("aria-label", `${boss.name || "秘境首领"}剩余气血`);
+    bossTrack.setAttribute("aria-valuemin", "0");
+    bossTrack.setAttribute("aria-valuemax", String(boss.max_hp));
+    bossTrack.setAttribute("aria-valuenow", String(boss.hp));
+    const bossFill = document.createElement("div");
+    bossFill.className = "secret-realm-health-fill boss";
+    bossFill.style.width = `${hpPct}%`;
+    bossTrack.appendChild(bossFill);
+    bossHealth.append(bossLabels, bossTrack);
+    arena.appendChild(bossHealth);
 
+    const playerHealth = document.createElement("div");
+    playerHealth.className = "secret-realm-health-block player";
+    const playerLabels = document.createElement("div");
+    playerLabels.className = "secret-realm-health-labels";
+    const playerLabel = document.createElement("span");
+    playerLabel.textContent = "你的气血";
+    playerLabels.appendChild(playerLabel);
+    const playerValue = document.createElement("strong");
+    playerValue.textContent = `${player.hp} / ${player.max_hp}`;
+    playerLabels.appendChild(playerValue);
+    const playerTrack = document.createElement("div");
+    playerTrack.className = "secret-realm-health-track player";
+    playerTrack.setAttribute("role", "progressbar");
+    playerTrack.setAttribute("aria-label", "你的剩余气血");
+    playerTrack.setAttribute("aria-valuemin", "0");
+    playerTrack.setAttribute("aria-valuemax", String(player.max_hp));
+    playerTrack.setAttribute("aria-valuenow", String(player.hp));
+    const playerFill = document.createElement("div");
+    playerFill.className = "secret-realm-health-fill player";
+    playerFill.style.width = `${playerHpPct}%`;
+    playerTrack.appendChild(playerFill);
+    playerHealth.append(playerLabels, playerTrack);
+    arena.appendChild(playerHealth);
+
+    const info = document.createElement("div");
+    info.className = "secret-realm-entry-info";
+    info.textContent = `本周入场次数：${entriesRemaining} / ${data.exploration_limit} · 个人战功：${data.contribution}`;
+    arena.appendChild(info);
+
+    const actions = document.createElement("div");
+    actions.className = "secret-realm-actions";
     const exploreButton = document.createElement("button");
     exploreButton.className = "btn btn-sm";
-    exploreButton.textContent = "探索秘境";
-    exploreButton.disabled = data.explorations >= data.exploration_limit;
+    exploreButton.textContent = "探索秘境（消耗1次）";
+    exploreButton.disabled = entriesRemaining <= 0;
     exploreButton.onclick = exploreSecretRealm;
-    body.appendChild(exploreButton);
-
+    actions.appendChild(exploreButton);
     const challengeButton = document.createElement("button");
+    challengeButton.id = "secret-realm-challenge-button";
     challengeButton.className = "btn btn-sm btn-fight";
-    challengeButton.textContent = "挑战首领";
-    challengeButton.disabled = data.explorations < data.exploration_limit || data.boss.hp <= 0;
+    challengeButton.textContent = isDefeated ? "本周首领已伏诛" : "出击（消耗1次）";
+    challengeButton.disabled = entriesRemaining <= 0 || isDefeated || player.hp <= 0 || secretRealmChallengePending;
     challengeButton.onclick = challengeSecretRealm;
-    body.appendChild(challengeButton);
+    actions.appendChild(challengeButton);
+    arena.appendChild(actions);
+    body.appendChild(arena);
+
+    const season = document.createElement("p");
+    season.className = "forge-hint secret-realm-season";
+    season.textContent = data.season ? `本周词缀：${data.season.name}｜${data.season.description}` : "";
+    body.appendChild(season);
 
     const title = document.createElement("h4");
     title.textContent = "本周贡献榜";
