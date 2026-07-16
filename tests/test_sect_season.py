@@ -1,4 +1,5 @@
 import models
+import game_state
 from game.secret_realm import get_season_modifier
 
 
@@ -49,3 +50,33 @@ def test_sect_boss_damage_is_shared_and_final_reward_is_only_granted_once(tmp_pa
         {"name": "first", "damage": 100},
         {"name": "second", "damage": 50},
     ]
+
+
+def test_sect_boss_socket_flow_returns_shared_state(tmp_path, monkeypatch):
+    monkeypatch.setattr(models, "DB_PATH", str(tmp_path / "sect_socket.db"))
+    models.init_db()
+    _seed_character(1, "socket_tester")
+    with game_state.cache_lock:
+        game_state.character_cache.clear()
+        game_state.dirty_users.clear()
+
+    from app import app, socketio
+
+    try:
+        flask_client = app.test_client()
+        with flask_client.session_transaction() as session:
+            session["user_id"] = 1
+            session["username"] = "socket_tester"
+        client = socketio.test_client(app, flask_test_client=flask_client)
+        client.emit("get_sect_boss")
+
+        received = client.get_received()
+
+        payloads = [message["args"][0] for message in received if message["name"] == "sect_boss_state"]
+        assert payloads[0]["boss"] == {"hp": 1200, "max_hp": 1200}
+        assert payloads[0]["leaderboard"] == []
+        client.disconnect()
+    finally:
+        with game_state.cache_lock:
+            game_state.character_cache.clear()
+            game_state.dirty_users.clear()

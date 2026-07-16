@@ -602,6 +602,7 @@ ITEMS = {
     "longxian_cao":  {"name": "龙涎草",       "desc": "吸收龙族气息而生的稀世灵草",       "type": "material", "price": 150},
     "fengxue_hua":   {"name": "凤血花",       "desc": "凤凰精血浇灌而成的绝世灵花",       "type": "material", "price": 180},
     "chiyan_jing":   {"name": "赤炎晶",       "desc": "击败赤焰秘境首领所得的炽热晶核",   "type": "material", "price": 260},
+    "zongmen_lingpai": {"name": "宗门令牌",  "desc": "护宗首领陨落时赐下的限量令牌",       "type": "material", "price": 320},
     # ── 矿石·材料 ──
     "hantie_kuang":  {"name": "寒铁矿",       "desc": "蕴含寒气的铁矿石",                 "type": "material", "price": 12},
     "xuanjin_shi":   {"name": "玄晶石",       "desc": "灵力凝聚而成的晶体矿石",           "type": "material", "price": 30},

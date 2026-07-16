@@ -150,6 +150,13 @@ function renderSecretRealm(data) {
     summary.textContent = `本周 ${data.week_id}｜探索 ${data.explorations}/${data.exploration_limit}｜个人贡献 ${data.contribution}`;
     body.appendChild(summary);
 
+    if (data.season) {
+        const season = document.createElement("p");
+        season.className = "forge-hint";
+        season.textContent = `赛季词缀：${data.season.name}｜${data.season.description}`;
+        body.appendChild(season);
+    }
+
     const boss = document.createElement("p");
     boss.textContent = `赤焰魔君：${data.boss.hp} / ${data.boss.max_hp} 气血｜你的伤害 ${data.boss_damage}`;
     body.appendChild(boss);
@@ -198,9 +205,54 @@ function renderSecretRealm(data) {
             body.appendChild(button);
         });
     }
+
+    if ((data.titles || []).length) {
+        const title = document.createElement("p");
+        title.className = "forge-hint";
+        title.textContent = `已获限定称号：${data.titles.join("、")}`;
+        body.appendChild(title);
+    }
 }
 
 // ═══════════════ 背包渲染 ═══════════════
+
+function renderSectBoss(data) {
+    const body = document.getElementById("sect-boss-body");
+    body.replaceChildren();
+
+    const summary = document.createElement("p");
+    summary.textContent = `本周 ${data.week_id}｜${data.name}：${data.boss.hp} / ${data.boss.max_hp} 气血`;
+    body.appendChild(summary);
+
+    const hint = document.createElement("p");
+    hint.className = "forge-hint";
+    hint.textContent = "全服同门共同镇压。最后一击可获得限量材料【宗门令牌】。";
+    body.appendChild(hint);
+
+    const challenge = document.createElement("button");
+    challenge.className = "btn btn-sm btn-fight";
+    challenge.textContent = "挑战护宗魔蛟";
+    challenge.disabled = data.boss.hp <= 0;
+    challenge.onclick = challengeSectBoss;
+    body.appendChild(challenge);
+
+    const title = document.createElement("h4");
+    title.textContent = "本周护宗榜";
+    body.appendChild(title);
+    const list = document.createElement("ol");
+    (data.leaderboard || []).forEach(entry => {
+        const item = document.createElement("li");
+        item.textContent = `${entry.name}｜伤害 ${entry.damage}`;
+        list.appendChild(item);
+    });
+    if (list.childElementCount) {
+        body.appendChild(list);
+    } else {
+        const empty = document.createElement("p");
+        empty.textContent = "尚无同门出战。";
+        body.appendChild(empty);
+    }
+}
 
 function renderInventory(items) {
     const div = document.getElementById("inventory-list");
