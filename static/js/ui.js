@@ -142,71 +142,142 @@ function renderState(s) {
     }
 }
 
-function renderSecretRealm(data) {
-    const body = document.getElementById("secret-realm-body");
-    body.replaceChildren();
+function createSecretRealmStat(label, value, detail) {
+    const stat = document.createElement("article");
+    stat.className = "secret-realm-stat";
+    const statLabel = document.createElement("span");
+    statLabel.className = "secret-realm-stat-label";
+    statLabel.textContent = label;
+    const statValue = document.createElement("strong");
+    statValue.className = "secret-realm-stat-value";
+    statValue.textContent = value;
+    const statDetail = document.createElement("small");
+    statDetail.textContent = detail;
+    stat.append(statLabel, statValue, statDetail);
+    return stat;
+}
 
-    const boss = data.boss;
-    const player = data.player || { hp: 0, max_hp: 0 };
-    const hpPct = boss.max_hp ? Math.max(0, Math.round(boss.hp / boss.max_hp * 100)) : 0;
-    const playerHpPct = player.max_hp ? Math.max(0, Math.round(player.hp / player.max_hp * 100)) : 0;
-    const entriesRemaining = data.entries_remaining ?? 0;
-    const isDefeated = boss.hp <= 0;
+function createSecretRealmHealthCard({ role, label, name, current, max, variant, icon }) {
+    const percent = max ? Math.max(0, Math.round(current / max * 100)) : 0;
+    const card = document.createElement("article");
+    card.className = `secret-realm-combatant ${variant}`;
+    const identity = document.createElement("div");
+    identity.className = "secret-realm-combatant-identity";
+    const emblem = document.createElement("div");
+    emblem.className = "secret-realm-combatant-emblem";
+    emblem.textContent = icon;
+    const copy = document.createElement("div");
+    const roleText = document.createElement("span");
+    roleText.className = "secret-realm-combatant-role";
+    roleText.textContent = role;
+    const title = document.createElement("h5");
+    title.textContent = name;
+    copy.append(roleText, title);
+    identity.append(emblem, copy);
 
-    const teamPanel = document.createElement("section");
-    teamPanel.className = "secret-realm-team";
-    const teamTitle = document.createElement("div");
-    teamTitle.className = "secret-realm-team-title";
-    teamTitle.textContent = "秘境队伍";
-    teamPanel.appendChild(teamTitle);
+    const labels = document.createElement("div");
+    labels.className = "secret-realm-health-labels";
+    const labelText = document.createElement("span");
+    labelText.textContent = label;
+    const value = document.createElement("strong");
+    value.textContent = `${current} / ${max}`;
+    labels.append(labelText, value);
+    const track = document.createElement("div");
+    track.className = "secret-realm-health-track";
+    track.setAttribute("role", "progressbar");
+    track.setAttribute("aria-label", `${name}${label}`);
+    track.setAttribute("aria-valuemin", "0");
+    track.setAttribute("aria-valuemax", String(max));
+    track.setAttribute("aria-valuenow", String(current));
+    const fill = document.createElement("div");
+    fill.className = "secret-realm-health-fill";
+    fill.style.width = `${percent}%`;
+    track.appendChild(fill);
+    const status = document.createElement("div");
+    status.className = "secret-realm-combatant-status";
+    status.textContent = `${percent}% 气血 · ${current <= 0 ? "已陨落" : "仍可出战"}`;
+    card.append(identity, labels, track, status);
+    return card;
+}
+
+function createSecretRealmTeamPanel(data) {
+    const panel = document.createElement("section");
+    panel.className = "secret-realm-team-panel";
+    const heading = document.createElement("div");
+    heading.className = "secret-realm-section-heading";
+    const title = document.createElement("h4");
+    title.textContent = data.team ? "秘境队伍" : "集结道友";
+    const caption = document.createElement("span");
+    caption.textContent = data.team ? `${data.team.members.length}/${data.team.max_members} 位修士` : "单人即可开战";
+    heading.append(title, caption);
+    panel.appendChild(heading);
     if (data.team) {
-        const teamHeader = document.createElement("div");
-        teamHeader.className = "secret-realm-team-header";
-        teamHeader.textContent = `${data.team.id} · ${data.team.members.length}/${data.team.max_members} 人`;
-        teamPanel.appendChild(teamHeader);
+        const code = document.createElement("div");
+        code.className = "secret-realm-team-code-display";
+        code.textContent = `队伍码 ${data.team.id}`;
+        panel.appendChild(code);
         const members = document.createElement("div");
         members.className = "secret-realm-team-members";
         data.team.members.forEach(member => {
-            const item = document.createElement("span");
+            const item = document.createElement("div");
             item.className = "secret-realm-team-member";
-            item.textContent = `${member.name}${member.id === data.team.leader_id ? " · 队长" : ""}`;
+            const dot = document.createElement("span");
+            dot.className = "secret-realm-team-member-dot";
+            const name = document.createElement("span");
+            name.textContent = member.name;
+            const role = document.createElement("small");
+            role.textContent = member.id === data.team.leader_id ? "队长" : "队员";
+            item.append(dot, name, role);
             members.appendChild(item);
         });
-        teamPanel.appendChild(members);
+        panel.appendChild(members);
         const leaveButton = document.createElement("button");
-        leaveButton.className = "btn btn-sm";
+        leaveButton.className = "btn btn-sm secret-realm-team-leave";
         leaveButton.textContent = "离开队伍";
         leaveButton.onclick = leaveSecretRealmTeam;
-        teamPanel.appendChild(leaveButton);
+        panel.appendChild(leaveButton);
     } else {
-        const empty = document.createElement("p");
-        empty.className = "secret-realm-team-empty";
-        empty.textContent = "单人即可开启，也可以邀请道友共同攻击（最多4人）。";
-        teamPanel.appendChild(empty);
+        const hint = document.createElement("p");
+        hint.className = "secret-realm-team-empty";
+        hint.textContent = "创建队伍后会立即进入战场，也可以把队伍码发给道友。";
         const controls = document.createElement("div");
         controls.className = "secret-realm-team-controls";
         const soloButton = document.createElement("button");
         soloButton.className = "btn btn-sm btn-fight";
-        soloButton.textContent = "单人开启秘境";
+        soloButton.textContent = "单人开战";
         soloButton.onclick = createSecretRealmTeam;
-        controls.appendChild(soloButton);
         const codeInput = document.createElement("input");
         codeInput.id = "secret-realm-team-code";
         codeInput.className = "secret-realm-team-code";
-        codeInput.placeholder = "输入队伍码";
+        codeInput.placeholder = "队伍码";
         codeInput.maxLength = 6;
-        controls.appendChild(codeInput);
+        codeInput.setAttribute("aria-label", "输入秘境队伍码");
         const joinButton = document.createElement("button");
         joinButton.className = "btn btn-sm";
-        joinButton.textContent = "加入队伍";
+        joinButton.textContent = "加入";
         joinButton.onclick = joinSecretRealmTeam;
-        controls.appendChild(joinButton);
-        teamPanel.appendChild(controls);
+        controls.append(soloButton, codeInput, joinButton);
+        panel.append(hint, controls);
     }
-    body.appendChild(teamPanel);
+    return panel;
+}
 
-    const arena = document.createElement("section");
-    arena.className = "secret-realm-arena";
+function renderSecretRealm(data) {
+    const body = document.getElementById("secret-realm-body");
+    body.replaceChildren();
+    const boss = data.boss || {};
+    const player = data.player || { hp: 0, max_hp: 0 };
+    const entriesRemaining = data.entries_remaining ?? 0;
+    const isDefeated = boss.hp <= 0;
+
+    const shell = document.createElement("section");
+    shell.className = "secret-realm-shell";
+    const hero = document.createElement("header");
+    hero.className = "secret-realm-hero";
+    const emblem = document.createElement("div");
+    emblem.className = "secret-realm-hero-emblem";
+    emblem.textContent = isDefeated ? "寂" : "焰";
+    const heroCopy = document.createElement("div");
     const eyebrow = document.createElement("p");
     eyebrow.className = "secret-realm-eyebrow";
     eyebrow.textContent = `${data.week_id} · 本周轮换首领`;
@@ -216,114 +287,119 @@ function renderSecretRealm(data) {
     const description = document.createElement("p");
     description.className = "secret-realm-boss-description";
     description.textContent = boss.description || "秘境深处，首领正在等待挑战。";
-    arena.append(eyebrow, name, description);
+    const badges = document.createElement("div");
+    badges.className = "secret-realm-badges";
+    [
+        `首领攻击 ${boss.attack ?? "未知"}`,
+        isDefeated ? "本周已镇压" : "持续反击",
+    ].forEach(text => {
+        const badge = document.createElement("span");
+        badge.textContent = text;
+        badges.appendChild(badge);
+    });
+    heroCopy.append(eyebrow, name, description, badges);
+    hero.append(emblem, heroCopy);
+    shell.appendChild(hero);
 
-    const bossHealth = document.createElement("div");
-    bossHealth.className = "secret-realm-health-block";
-    const bossLabels = document.createElement("div");
-    bossLabels.className = "secret-realm-health-labels";
-    const bossLabel = document.createElement("span");
-    bossLabel.textContent = "首领气血";
-    bossLabels.appendChild(bossLabel);
-    const bossValue = document.createElement("strong");
-    bossValue.textContent = `${boss.hp} / ${boss.max_hp}`;
-    bossLabels.appendChild(bossValue);
-    const bossTrack = document.createElement("div");
-    bossTrack.className = "secret-realm-health-track boss";
-    bossTrack.setAttribute("role", "progressbar");
-    bossTrack.setAttribute("aria-label", `${boss.name || "秘境首领"}剩余气血`);
-    bossTrack.setAttribute("aria-valuemin", "0");
-    bossTrack.setAttribute("aria-valuemax", String(boss.max_hp));
-    bossTrack.setAttribute("aria-valuenow", String(boss.hp));
-    const bossFill = document.createElement("div");
-    bossFill.className = "secret-realm-health-fill boss";
-    bossFill.style.width = `${hpPct}%`;
-    bossTrack.appendChild(bossFill);
-    bossHealth.append(bossLabels, bossTrack);
-    arena.appendChild(bossHealth);
+    const stats = document.createElement("div");
+    stats.className = "secret-realm-stats";
+    stats.append(
+        createSecretRealmStat("剩余入场", `${entriesRemaining} / 3`, "死亡或击杀后扣除"),
+        createSecretRealmStat("个人战功", String(data.contribution || 0), "本周累计贡献"),
+        createSecretRealmStat("造成伤害", String(data.boss_damage || 0), "对首领累计伤害"),
+    );
+    shell.appendChild(stats);
+    shell.appendChild(createSecretRealmTeamPanel(data));
 
-    const playerHealth = document.createElement("div");
-    playerHealth.className = "secret-realm-health-block player";
-    const playerLabels = document.createElement("div");
-    playerLabels.className = "secret-realm-health-labels";
-    const playerLabel = document.createElement("span");
-    playerLabel.textContent = "你的气血";
-    playerLabels.appendChild(playerLabel);
-    const playerValue = document.createElement("strong");
-    playerValue.textContent = `${player.hp} / ${player.max_hp}`;
-    playerLabels.appendChild(playerValue);
-    const playerTrack = document.createElement("div");
-    playerTrack.className = "secret-realm-health-track player";
-    playerTrack.setAttribute("role", "progressbar");
-    playerTrack.setAttribute("aria-label", "你的剩余气血");
-    playerTrack.setAttribute("aria-valuemin", "0");
-    playerTrack.setAttribute("aria-valuemax", String(player.max_hp));
-    playerTrack.setAttribute("aria-valuenow", String(player.hp));
-    const playerFill = document.createElement("div");
-    playerFill.className = "secret-realm-health-fill player";
-    playerFill.style.width = `${playerHpPct}%`;
-    playerTrack.appendChild(playerFill);
-    playerHealth.append(playerLabels, playerTrack);
-    arena.appendChild(playerHealth);
+    const battlefield = document.createElement("section");
+    battlefield.className = "secret-realm-battlefield";
+    battlefield.append(
+        createSecretRealmHealthCard({ role: "秘境首领", label: "首领气血", name: boss.name || data.name, current: boss.hp || 0, max: boss.max_hp || 0, variant: "boss", icon: "焰" }),
+        Object.assign(document.createElement("div"), { className: "secret-realm-versus", textContent: "VS" }),
+        createSecretRealmHealthCard({ role: "你的修士", label: "自身气血", name: "当前状态", current: player.hp, max: player.max_hp, variant: "player", icon: "剑" }),
+    );
+    shell.appendChild(battlefield);
 
-    const info = document.createElement("div");
-    info.className = "secret-realm-entry-info";
-    info.textContent = `本周剩余入场次数：${entriesRemaining} / 3 · 个人战功：${data.contribution} · 战斗中出击不限次数`;
-    arena.appendChild(info);
+    const rules = document.createElement("div");
+    rules.className = "secret-realm-rule-note";
+    rules.textContent = isDefeated ? "首领已伏诛，秘境将在下周轮换。" : "每次出击都会承受反击；战斗中不限出击次数，死亡或击杀首领才消耗入场次数。";
+    shell.appendChild(rules);
 
-    const actions = document.createElement("div");
-    actions.className = "secret-realm-actions";
-    const challengeButton = document.createElement("button");
-    challengeButton.id = "secret-realm-challenge-button";
-    challengeButton.className = "btn btn-sm btn-fight";
-    challengeButton.textContent = isDefeated ? "本周首领已伏诛" : "出击（本次不扣次数）";
-    challengeButton.disabled = entriesRemaining <= 0 || isDefeated || player.hp <= 0 || secretRealmChallengePending || !data.team;
-    challengeButton.onclick = challengeSecretRealm;
-    actions.appendChild(challengeButton);
-    arena.appendChild(actions);
-    body.appendChild(arena);
+    const action = document.createElement("button");
+    action.id = "secret-realm-challenge-button";
+    action.className = "btn secret-realm-challenge";
+    action.textContent = isDefeated ? "本周首领已伏诛" : "出击 · 继续鏖战";
+    action.disabled = entriesRemaining <= 0 || isDefeated || player.hp <= 0 || secretRealmChallengePending || !data.team;
+    action.onclick = challengeSecretRealm;
+    shell.appendChild(action);
+    body.appendChild(shell);
 
-    const season = document.createElement("p");
-    season.className = "forge-hint secret-realm-season";
-    season.textContent = data.season ? `本周词缀：${data.season.name}｜${data.season.description}` : "";
+    const season = document.createElement("section");
+    season.className = "secret-realm-affix";
+    const seasonLabel = document.createElement("span");
+    seasonLabel.textContent = "本周词缀";
+    const seasonText = document.createElement("strong");
+    seasonText.textContent = data.season ? `${data.season.name} · ${data.season.description}` : "暂无词缀";
+    season.append(seasonLabel, seasonText);
     body.appendChild(season);
 
-    const title = document.createElement("h4");
-    title.textContent = "本周贡献榜";
-    body.appendChild(title);
-    const list = document.createElement("ol");
-    (data.leaderboard || []).forEach(entry => {
-        const item = document.createElement("li");
-        item.textContent = `${entry.name}｜贡献 ${entry.contribution}｜伤害 ${entry.boss_damage}`;
-        list.appendChild(item);
-    });
-    if (!list.childElementCount) {
-        const empty = document.createElement("p");
-        empty.textContent = "尚无人踏入秘境。";
-        body.appendChild(empty);
+    const leaderboard = document.createElement("section");
+    leaderboard.className = "secret-realm-leaderboard";
+    const leaderboardHeading = document.createElement("div");
+    leaderboardHeading.className = "secret-realm-section-heading";
+    const leaderboardTitle = document.createElement("h4");
+    leaderboardTitle.textContent = "本周贡献榜";
+    const leaderboardCaption = document.createElement("span");
+    leaderboardCaption.textContent = "按贡献排序";
+    leaderboardHeading.append(leaderboardTitle, leaderboardCaption);
+    leaderboard.appendChild(leaderboardHeading);
+    const entries = data.leaderboard || [];
+    if (entries.length) {
+        entries.forEach((entry, index) => {
+            const row = document.createElement("div");
+            row.className = "secret-realm-rank-row";
+            const rank = document.createElement("span");
+            rank.className = "secret-realm-rank";
+            rank.textContent = index < 3 ? ["壹", "贰", "叁"][index] : String(index + 1);
+            const playerName = document.createElement("span");
+            playerName.className = "secret-realm-rank-name";
+            playerName.textContent = entry.name;
+            const damage = document.createElement("strong");
+            damage.className = "secret-realm-rank-damage";
+            damage.textContent = `贡献 ${entry.contribution} · 伤害 ${entry.boss_damage}`;
+            row.append(rank, playerName, damage);
+            leaderboard.appendChild(row);
+        });
     } else {
-        body.appendChild(list);
+        const empty = document.createElement("p");
+        empty.className = "secret-realm-empty";
+        empty.textContent = "尚无人踏入秘境，你将成为第一位挑战者。";
+        leaderboard.appendChild(empty);
     }
+    body.appendChild(leaderboard);
 
     const settlements = data.pending_settlements || [];
     if (settlements.length) {
+        const settlement = document.createElement("section");
+        settlement.className = "secret-realm-settlement";
         const settlementTitle = document.createElement("h4");
         settlementTitle.textContent = "待领取周结算";
-        body.appendChild(settlementTitle);
-        settlements.forEach(settlement => {
+        settlement.appendChild(settlementTitle);
+        settlements.forEach(item => {
             const button = document.createElement("button");
             button.className = "btn btn-sm";
-            button.textContent = `${settlement.week_id}（贡献 ${settlement.contribution}）领取奖励`;
-            button.onclick = () => claimSecretRealmSettlement(settlement.week_id);
-            body.appendChild(button);
+            button.textContent = `${item.week_id} · 贡献 ${item.contribution} · 领取奖励`;
+            button.onclick = () => claimSecretRealmSettlement(item.week_id);
+            settlement.appendChild(button);
         });
+        body.appendChild(settlement);
     }
 
     if ((data.titles || []).length) {
-        const title = document.createElement("p");
-        title.className = "forge-hint";
-        title.textContent = `已获限定称号：${data.titles.join("、")}`;
-        body.appendChild(title);
+        const titles = document.createElement("p");
+        titles.className = "secret-realm-titles";
+        titles.textContent = `已获限定称号 · ${data.titles.join("、")}`;
+        body.appendChild(titles);
     }
 }
 

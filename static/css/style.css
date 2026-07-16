@@ -924,6 +924,90 @@ a:focus-visible {
 .secret-realm-actions .btn:disabled { cursor: not-allowed; opacity: .48; filter: saturate(.55); }
 .secret-realm-season { margin: 12px 0; }
 @media (max-width: 520px) { .secret-realm-actions { grid-template-columns: 1fr; } .secret-realm-team-controls { grid-template-columns: 1fr; } }
+/* 秘境战场升级：以首领状态为中心的战斗 HUD */
+.secret-realm-modal-content { width: min(760px, calc(100vw - 32px)); max-height: min(860px, calc(100vh - 40px)); padding: 24px; background: #0b1218; border-color: rgba(196, 86, 91, .34); box-shadow: 0 24px 70px rgba(0, 0, 0, .68), 0 0 42px rgba(196, 86, 91, .1); }
+.secret-realm-modal-content > h3 { margin: 0 0 16px; color: #e8c49a; border-bottom-color: rgba(196, 86, 91, .2); }
+.secret-realm-shell { position: relative; overflow: hidden; border: 1px solid rgba(228, 145, 98, .36); border-radius: 14px; padding: 20px; background: radial-gradient(circle at 10% 0%, rgba(196, 86, 91, .2), transparent 34%), radial-gradient(circle at 92% 16%, rgba(228, 145, 98, .12), transparent 30%), #111a22; }
+.secret-realm-shell::after { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .18; background-image: linear-gradient(115deg, transparent 0 48%, rgba(255, 210, 163, .18) 49% 50%, transparent 51%); background-size: 22px 22px; mask-image: linear-gradient(to bottom, rgba(0, 0, 0, .75), transparent 70%); }
+.secret-realm-hero, .secret-realm-stats, .secret-realm-team-panel, .secret-realm-battlefield, .secret-realm-rule-note, .secret-realm-challenge { position: relative; z-index: 1; }
+.secret-realm-hero { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 16px; }
+.secret-realm-hero-emblem { display: grid; place-items: center; width: 68px; height: 68px; border: 1px solid rgba(255, 176, 122, .72); border-radius: 18px; color: #ffe0bc; background: linear-gradient(145deg, #5f2825, #23151a); box-shadow: inset 0 0 22px rgba(228, 145, 98, .24), 0 0 28px rgba(196, 86, 91, .2); font-family: var(--font-serif); font-size: 34px; animation: secret-realm-ember 3.2s ease-in-out infinite; }
+@keyframes secret-realm-ember { 0%, 100% { transform: translateY(0); box-shadow: inset 0 0 22px rgba(228, 145, 98, .24), 0 0 22px rgba(196, 86, 91, .16); } 50% { transform: translateY(-2px); box-shadow: inset 0 0 28px rgba(228, 145, 98, .36), 0 0 34px rgba(196, 86, 91, .28); } }
+.secret-realm-eyebrow { margin: 0 0 5px; color: #d7a276; font-size: 11px; letter-spacing: .1em; }
+.secret-realm-boss-name { margin: 0; color: #ffe2c9; font-family: var(--font-serif); font-size: clamp(24px, 4vw, 32px); letter-spacing: .04em; text-wrap: balance; }
+.secret-realm-boss-description { max-width: 52ch; margin: 5px 0 10px; color: #a9b4ba; font-size: 12px; line-height: 1.6; }
+.secret-realm-badges { display: flex; flex-wrap: wrap; gap: 6px; }
+.secret-realm-badges span { padding: 4px 7px; border: 1px solid rgba(228, 145, 98, .27); border-radius: 4px; color: #d7bd9e; background: rgba(196, 86, 91, .1); font-size: 10px; }
+.secret-realm-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 18px; }
+.secret-realm-stat { min-width: 0; padding: 10px 11px; border: 1px solid rgba(169, 180, 186, .16); border-radius: 8px; background: rgba(9, 15, 20, .52); }
+.secret-realm-stat-label, .secret-realm-stat small { display: block; color: #89979e; font-size: 10px; }
+.secret-realm-stat-value { display: block; margin: 3px 0 2px; overflow: hidden; color: #f4dfbe; font-family: var(--font-mono); font-size: 16px; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
+.secret-realm-team-panel { margin-top: 14px; padding: 13px; border: 1px solid rgba(143, 197, 223, .22); border-radius: 9px; background: rgba(18, 31, 40, .72); }
+.secret-realm-section-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.secret-realm-section-heading h4 { margin: 0; color: #dcebf0; font-size: 13px; letter-spacing: .04em; }
+.secret-realm-section-heading span { color: #82939b; font-size: 10px; }
+.secret-realm-team-code-display { display: inline-flex; margin-top: 8px; padding: 4px 7px; border: 1px solid rgba(223, 194, 138, .28); border-radius: 4px; color: #dfc28a; font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; }
+.secret-realm-team-members { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin: 10px 0; }
+.secret-realm-team-member { display: flex; align-items: center; gap: 5px; min-width: 0; padding: 7px 8px; border: 1px solid rgba(143, 197, 223, .17); border-radius: 6px; color: #cbd9de; background: rgba(57, 103, 125, .15); font-size: 11px; }
+.secret-realm-team-member span:not(.secret-realm-team-member-dot) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.secret-realm-team-member small { margin-left: auto; color: #7e9ba5; font-size: 9px; }
+.secret-realm-team-member-dot { width: 6px; height: 6px; flex: 0 0 6px; border-radius: 50%; background: #77c49e; box-shadow: 0 0 8px rgba(119, 196, 158, .55); }
+.secret-realm-team-leave { margin-top: 2px; }
+.secret-realm-team-empty { margin: 7px 0 10px; color: #9caab0; font-size: 11px; }
+.secret-realm-team-controls { display: grid; grid-template-columns: auto minmax(100px, 1fr) auto; gap: 7px; align-items: center; }
+.secret-realm-team-code { min-width: 0; height: 34px; padding: 0 9px; border: 1px solid rgba(143, 197, 223, .3); border-radius: 5px; color: #d9f0ff; background: #10161c; font-size: 12px; }
+.secret-realm-battlefield { display: grid; grid-template-columns: minmax(0, 1fr) 34px minmax(0, 1fr); align-items: stretch; gap: 10px; margin-top: 16px; }
+.secret-realm-combatant { min-width: 0; padding: 13px; border: 1px solid rgba(169, 180, 186, .18); border-radius: 10px; background: rgba(9, 15, 20, .58); }
+.secret-realm-combatant.boss { border-color: rgba(228, 145, 98, .4); background: linear-gradient(145deg, rgba(92, 32, 32, .38), rgba(9, 15, 20, .7)); }
+.secret-realm-combatant.player { border-color: rgba(119, 196, 158, .34); background: linear-gradient(145deg, rgba(29, 73, 61, .3), rgba(9, 15, 20, .7)); }
+.secret-realm-combatant-identity { display: flex; align-items: center; gap: 9px; margin-bottom: 14px; }
+.secret-realm-combatant-emblem { display: grid; place-items: center; width: 35px; height: 35px; flex: 0 0 35px; border: 1px solid rgba(255, 210, 163, .42); border-radius: 8px; color: #f5d3ad; background: rgba(196, 86, 91, .2); font-family: var(--font-serif); font-size: 18px; }
+.secret-realm-combatant.player .secret-realm-combatant-emblem { border-color: rgba(119, 196, 158, .4); color: #b6e3ca; background: rgba(119, 196, 158, .14); }
+.secret-realm-combatant-role { display: block; color: #84949c; font-size: 9px; letter-spacing: .08em; }
+.secret-realm-combatant h5 { overflow: hidden; margin: 2px 0 0; color: #e7edf0; font-family: var(--font-serif); font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
+.secret-realm-health-labels { margin-bottom: 6px; color: #bdc9cd; font-size: 11px; }
+.secret-realm-health-labels strong { color: #f4dfbe; font-family: var(--font-mono); font-size: 12px; font-variant-numeric: tabular-nums; }
+.secret-realm-health-track { height: 9px; overflow: hidden; border: 1px solid rgba(201, 222, 235, .25); border-radius: 3px; background: #0b1014; }
+.secret-realm-health-fill { height: 100%; min-width: 0; border-radius: inherit; transition: width 280ms ease; }
+.secret-realm-combatant.boss .secret-realm-health-fill { background: linear-gradient(90deg, #b8474d, #e49162); box-shadow: 0 0 12px rgba(228, 145, 98, .45); }
+.secret-realm-combatant.player .secret-realm-health-fill { background: linear-gradient(90deg, #3f987f, #9bcf9b); box-shadow: 0 0 12px rgba(104, 204, 166, .34); }
+.secret-realm-combatant-status { margin-top: 7px; color: #82939b; font-size: 10px; text-align: right; }
+.secret-realm-versus { display: grid; place-items: center; align-self: center; width: 34px; height: 34px; border: 1px solid rgba(223, 194, 138, .35); border-radius: 50%; color: #dfc28a; background: #1a1713; font-family: var(--font-mono); font-size: 10px; letter-spacing: -.06em; }
+.secret-realm-rule-note { margin-top: 12px; padding: 9px 10px; border-left: 2px solid #c4565b; color: #b6c0c4; background: rgba(196, 86, 91, .08); font-size: 11px; line-height: 1.55; }
+.secret-realm-challenge { width: 100%; min-height: 46px; margin-top: 14px; border-color: #e26d55; color: #ffe5d6; background: linear-gradient(135deg, #7a2d29, #4b1c20); font-family: var(--font-serif); font-size: 15px; letter-spacing: .08em; transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease; }
+.secret-realm-challenge:hover:not(:disabled) { border-color: #ffad7e; box-shadow: 0 0 22px rgba(211, 78, 78, .34); transform: translateY(-1px); }
+.secret-realm-challenge:active:not(:disabled) { transform: translateY(1px); }
+.secret-realm-challenge:disabled { cursor: not-allowed; opacity: .5; filter: saturate(.55); }
+.secret-realm-affix { display: flex; align-items: baseline; gap: 9px; margin-top: 12px; padding: 10px 12px; border: 1px solid rgba(223, 194, 138, .18); border-radius: 7px; color: #dfc28a; background: rgba(98, 75, 23, .1); font-size: 11px; line-height: 1.5; }
+.secret-realm-affix span { color: #8f7b5d; font-size: 10px; letter-spacing: .08em; }
+.secret-realm-affix strong { color: #d7c39e; font-weight: 500; }
+.secret-realm-leaderboard { margin-top: 18px; }
+.secret-realm-rank-row { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; align-items: center; gap: 9px; min-height: 39px; padding: 0 9px; border-bottom: 1px solid rgba(143, 197, 223, .1); }
+.secret-realm-rank { color: #d7a276; font-family: var(--font-serif); text-align: center; }
+.secret-realm-rank-name { overflow: hidden; color: #cbd9de; text-overflow: ellipsis; white-space: nowrap; }
+.secret-realm-rank-damage { color: #d7bd9e; font-size: 10px; font-variant-numeric: tabular-nums; }
+.secret-realm-empty { margin: 0; padding: 15px; border: 1px dashed rgba(201, 157, 119, .3); color: #89979e; font-size: 11px; text-align: center; }
+.secret-realm-settlement { margin-top: 18px; padding-top: 14px; border-top: 1px solid rgba(143, 197, 223, .12); }
+.secret-realm-settlement h4 { margin: 0 0 9px; }
+.secret-realm-settlement .btn { margin: 0 7px 7px 0; }
+.secret-realm-titles { margin: 16px 0 0; color: #d7bd9e; font-size: 11px; }
+@media (max-width: 620px) {
+    .secret-realm-modal-content { padding: 18px 14px; }
+    .secret-realm-shell { padding: 15px; }
+    .secret-realm-hero { grid-template-columns: 48px minmax(0, 1fr); gap: 11px; }
+    .secret-realm-hero-emblem { width: 48px; height: 48px; border-radius: 13px; font-size: 25px; }
+    .secret-realm-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
+    .secret-realm-stat { padding: 8px 7px; }
+    .secret-realm-stat-value { font-size: 13px; }
+    .secret-realm-team-members { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .secret-realm-battlefield { grid-template-columns: 1fr; gap: 6px; }
+    .secret-realm-versus { width: 100%; height: 22px; border: 0; background: transparent; }
+    .secret-realm-rank-row { grid-template-columns: 24px minmax(0, 1fr); }
+    .secret-realm-rank-damage { grid-column: 2; margin-top: -8px; }
+    .secret-realm-affix { display: block; }
+    .secret-realm-affix strong { display: block; margin-top: 3px; }
+}
+
 .divider { 
     border: none; 
     border-top: 1px solid rgba(63, 167, 117, 0.1); 
