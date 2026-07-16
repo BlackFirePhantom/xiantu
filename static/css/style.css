@@ -978,6 +978,20 @@ a:focus-visible {
 .secret-realm-challenge:hover:not(:disabled) { border-color: #ffad7e; box-shadow: 0 0 22px rgba(211, 78, 78, .34); transform: translateY(-1px); }
 .secret-realm-challenge:active:not(:disabled) { transform: translateY(1px); }
 .secret-realm-challenge:disabled { cursor: not-allowed; opacity: .5; filter: saturate(.55); }
+.secret-realm-resource-panel { position: relative; z-index: 1; margin-top: 12px; padding: 10px 12px; border: 1px solid rgba(94, 177, 222, .2); border-radius: 8px; background: rgba(11, 22, 30, .72); }
+.secret-realm-mana { color: #9fd8f0; }
+.secret-realm-mana-track { height: 7px; overflow: hidden; border: 1px solid rgba(96, 180, 226, .35); border-radius: 999px; background: #091219; }
+.secret-realm-mana-fill { height: 100%; border-radius: inherit; background: linear-gradient(90deg, #3e8fbe, #82d3ec); box-shadow: 0 0 12px rgba(94, 190, 230, .45); transition: width 280ms ease; }
+.secret-realm-skill-panel { position: relative; z-index: 1; margin-top: 12px; padding: 12px; border: 1px solid rgba(143, 197, 223, .22); border-radius: 9px; background: rgba(18, 31, 40, .7); }
+.secret-realm-skill-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 9px; }
+.secret-realm-skill { display: grid; gap: 4px; min-height: 58px; padding: 9px 10px; border: 1px solid rgba(105, 183, 218, .32); border-radius: 7px; color: #dcebf0; background: linear-gradient(145deg, rgba(44, 91, 116, .3), rgba(11, 22, 30, .8)); text-align: left; cursor: pointer; transition: border-color 160ms ease, transform 160ms ease, background 160ms ease; }
+.secret-realm-skill strong { color: #bfe8f7; font-size: 12px; }
+.secret-realm-skill span { color: #8ca9b5; font-size: 10px; line-height: 1.35; }
+.secret-realm-skill:hover:not(:disabled) { border-color: #8ed9ef; background: rgba(45, 106, 136, .42); transform: translateY(-1px); }
+.secret-realm-skill:disabled { cursor: not-allowed; opacity: .42; filter: saturate(.5); }
+.secret-realm-skill-empty { margin: 8px 0 0; color: #89979e; font-size: 11px; }
+.secret-realm-defend { position: relative; z-index: 1; width: 100%; min-height: 38px; margin-top: 9px; border-color: rgba(119, 196, 158, .38); color: #b8dfcf; background: rgba(38, 88, 72, .24); font-size: 12px; }
+.secret-realm-defend:hover:not(:disabled) { border-color: #8ed9b4; background: rgba(38, 103, 80, .4); }
 .secret-realm-affix { display: flex; align-items: baseline; gap: 9px; margin-top: 12px; padding: 10px 12px; border: 1px solid rgba(223, 194, 138, .18); border-radius: 7px; color: #dfc28a; background: rgba(98, 75, 23, .1); font-size: 11px; line-height: 1.5; }
 .secret-realm-affix span { color: #8f7b5d; font-size: 10px; letter-spacing: .08em; }
 .secret-realm-affix strong { color: #d7c39e; font-weight: 500; }
@@ -1006,6 +1020,7 @@ a:focus-visible {
     .secret-realm-rank-damage { grid-column: 2; margin-top: -8px; }
     .secret-realm-affix { display: block; }
     .secret-realm-affix strong { display: block; margin-top: 3px; }
+    .secret-realm-skill-grid { grid-template-columns: 1fr; }
 }
 
 .divider { 

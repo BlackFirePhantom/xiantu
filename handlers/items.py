@@ -26,7 +26,7 @@ from handlers.base import do_get_state
 
 # 坊市可购买物品列表（用于物品来源展示）
 _SHOP_ITEMS = [
-    "huiqi_dan", "huichun_dan", "peiyuan_dan", "dingdan",
+    "huiqi_dan", "huixi_dan", "huichun_dan", "peiyuan_dan", "dingdan",
     "liliang_fulu", "huti_fulu", "tiemu_sword", "cloth_robe",
     "qingyu_peidai", "tongqian_hufu", "egg_common", "pet_feed",
 ]
@@ -56,6 +56,15 @@ def _apply_consumable(char, item, item_id, inv, user_id):
         stats = get_full_stats(char)
         update_character(user_id, hp=stats["max_hp"])
         return f"你服下【{item['name']}】，灵丹妙药，气血完全恢复！", "heal"
+
+    if effect == "mp":
+        stats = get_full_stats(char)
+        max_mp = stats.get("max_mp", char.get("max_mp", char.get("mp", 0)))
+        current_mp = int(char.get("mp", max_mp))
+        new_mp = min(current_mp + item["value"], max_mp)
+        restored = new_mp - current_mp
+        update_character(user_id, mp=new_mp)
+        return f"你服下【{item['name']}】，灵力回涌，恢复了 {restored} 点灵力。", "buff"
 
     if effect == "exp":
         update_character(user_id, exp=char["exp"] + item["value"])

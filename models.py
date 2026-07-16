@@ -293,7 +293,17 @@ def apply_secret_realm_boss_damage(user_id, week_id, requested_damage, max_hp=50
 
 
 def resolve_secret_realm_boss_encounter(
-    user_id, week_id, *, player_damage, player_defense, boss_attack, max_hp, entry_limit
+    user_id,
+    week_id,
+    *,
+    player_damage,
+    player_defense,
+    boss_attack,
+    max_hp,
+    entry_limit,
+    player_hp=None,
+    player_mp=None,
+    minimum_damage=1,
 ):
     """Atomically resolve one realm-boss strike and its counterattack."""
     with get_db() as conn:
@@ -320,18 +330,20 @@ def resolve_secret_realm_boss_encounter(
             return {"ok": False, "reason": "boss_defeated"}
 
         char = conn.execute(
-            "SELECT hp, max_hp, deaths, location, sect_contrib, inventory FROM characters WHERE user_id = ?", (user_id,)
+            "SELECT hp, max_hp, mp, deaths, location, sect_contrib, inventory FROM characters WHERE user_id = ?", (user_id,)
         ).fetchone()
         if not char:
             return {"ok": False, "reason": "character_missing"}
 
-        damage = min(max(1, int(player_damage)), boss["hp"])
+        damage = min(max(int(minimum_damage), int(player_damage)), boss["hp"])
         remaining_hp = boss["hp"] - damage
         defeated = remaining_hp == 0
         counter_damage = 0 if defeated else max(1, int(boss_attack) - int(player_defense))
-        player_hp = max(0, char["hp"] - counter_damage)
+        action_hp = char["hp"] if player_hp is None else min(char["max_hp"], max(0, int(player_hp)))
+        player_hp = max(0, action_hp - counter_damage)
         player_died = player_hp == 0
         restored_hp = max(1, char["max_hp"] // 2) if player_died else player_hp
+        persisted_mp = char["mp"] if player_mp is None else max(0, int(player_mp))
         inventory = json.loads(char["inventory"]) if char["inventory"] else {}
         if defeated:
             inventory["chiyan_jing"] = inventory.get("chiyan_jing", 0) + 1
@@ -346,10 +358,11 @@ def resolve_secret_realm_boss_encounter(
         )
         conn.execute(
             """UPDATE characters
-               SET hp = ?, deaths = ?, location = ?, sect_contrib = ?, inventory = ?
+               SET hp = ?, mp = ?, deaths = ?, location = ?, sect_contrib = ?, inventory = ?
                WHERE user_id = ?""",
             (
                 restored_hp,
+                persisted_mp,
                 char["deaths"] + int(player_died),
                 "qingyun_town" if player_died else char["location"],
                 char["sect_contrib"] + damage,
@@ -366,6 +379,7 @@ def resolve_secret_realm_boss_encounter(
         "reward_granted": defeated,
         "player_damage": counter_damage,
         "player_hp": restored_hp,
+        "player_mp": persisted_mp,
         "player_died": player_died,
         "entry_consumed": entry_consumed,
         "entries_remaining": entry_limit - run["explorations"] - int(entry_consumed),

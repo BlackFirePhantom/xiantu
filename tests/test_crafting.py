@@ -4,11 +4,41 @@ import pytest
 from unittest.mock import patch
 from game.crafting import try_refine_pill, try_forge, get_forge_recipes_list
 from game_data import RECIPES, FORGE_RECIPES, ITEMS
+from handlers import items as item_handlers
 
 
 # ═══════════════ 炼丹 ═══════════════
 
 class TestTryRefinePill:
+    def test_mp_pill_is_craftable(self, make_char, make_inv):
+        assert ITEMS["huixi_dan"]["effect"] == "mp"
+        assert ITEMS["huixi_dan"]["value"] > 0
+        recipe = RECIPES["huixi_dan"]
+        char = make_char(level=recipe["req_realm"])
+        inv = make_inv(**{mat: count for mat, count in recipe["ingredients"].items()})
+
+        result = try_refine_pill("huixi_dan", char, inv)
+
+        assert result["success"] is True
+        assert inv["huixi_dan"] == 1
+
+    def test_mp_pill_restores_mana_without_exceeding_cap(self, make_char, make_inv, monkeypatch):
+        char = make_char(level=1, mp=35)
+        inv = make_inv(huixi_dan=1)
+        updates = {}
+        monkeypatch.setattr(item_handlers, "get_full_stats", lambda _: {"max_mp": 50})
+        monkeypatch.setattr(item_handlers, "update_character", lambda _uid, **fields: updates.update(fields))
+        monkeypatch.setattr(item_handlers, "set_character_inventory", lambda _uid, value: None)
+
+        message, message_type = item_handlers._apply_consumable(
+            char, ITEMS["huixi_dan"], "huixi_dan", inv, char["user_id"]
+        )
+
+        assert updates["mp"] == 50
+        assert "15" in message
+        assert message_type == "buff"
+        assert "huixi_dan" not in inv
+
     def test_recipe_not_exist(self, make_char, make_inv):
         char = make_char(level=5)
         inv = make_inv(lingcao=10)

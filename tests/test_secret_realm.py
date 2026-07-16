@@ -91,6 +91,25 @@ def test_boss_encounter_keeps_entry_until_death_or_kill(tmp_path, monkeypatch):
     assert models.get_secret_realm_run(1, "2026-W29")["explorations"] == 0
     assert models.get_character(1)["hp"] == 80
 
+
+def test_boss_encounter_persists_skill_updated_hp_and_mp(tmp_path, monkeypatch):
+    monkeypatch.setattr(models, "DB_PATH", str(tmp_path / "realm_skill.db"))
+    models.init_db()
+    with models.get_db() as conn:
+        conn.execute("INSERT INTO users (id, username, password_hash) VALUES (1, 'tester', 'unused')")
+        conn.execute(
+            "INSERT INTO characters (user_id, name, hp, max_hp, mp, max_mp, location) VALUES (1, 'tester', 100, 100, 50, 80, 'chiyan_forest')"
+        )
+
+    result = models.resolve_secret_realm_boss_encounter(
+        1, "2026-W29", player_damage=20, player_defense=5, boss_attack=25,
+        max_hp=100, entry_limit=3, player_hp=90, player_mp=35
+    )
+
+    assert result["player_hp"] == 70
+    assert result["player_mp"] == 35
+    assert models.get_character(1)["mp"] == 35
+
     follow_up = models.resolve_secret_realm_boss_encounter(
         1, "2026-W29", player_damage=40, player_defense=5, boss_attack=25, max_hp=100, entry_limit=3
     )
@@ -137,7 +156,7 @@ def test_secret_realm_socket_state_shows_player_hp_and_consumes_entry(tmp_path, 
     with models.get_db() as conn:
         conn.execute("INSERT INTO users (id, username, password_hash) VALUES (1, 'tester', 'unused')")
         conn.execute(
-            "INSERT INTO characters (user_id, name, hp, max_hp, location) VALUES (1, 'tester', 100, 100, 'chiyan_forest')"
+            "INSERT INTO characters (user_id, name, hp, max_hp, mp, techniques, location) VALUES (1, 'tester', 100, 100, 50, '[\"modao_rumen\"]', 'chiyan_forest')"
         )
     with game_state.cache_lock:
         game_state.character_cache.clear()
@@ -156,14 +175,17 @@ def test_secret_realm_socket_state_shows_player_hp_and_consumes_entry(tmp_path, 
         client.emit("get_secret_realm")
         initial = [event["args"][0] for event in client.get_received() if event["name"] == "secret_realm_state"][0]
 
-        client.emit("secret_realm_challenge")
+        client.emit("secret_realm_challenge", {"action": "skill", "skill_id": "modao_rumen"})
         updated = [event["args"][0] for event in client.get_received() if event["name"] == "secret_realm_state"][-1]
 
         assert initial["boss"]["name"] == get_weekly_boss("2026-W29")["name"]
-        assert initial["player"] == {"hp": 100, "max_hp": 100}
+        assert initial["player"]["hp"] == 100
+        assert initial["player"]["mp"] == 50
+        assert any(skill["tech_id"] == "modao_rumen" for skill in initial["skills"])
         assert initial["entries_remaining"] == EXPLORATION_LIMIT
         assert updated["entries_remaining"] == EXPLORATION_LIMIT
         assert updated["player"]["hp"] < initial["player"]["hp"]
+        assert updated["player"]["mp"] < initial["player"]["mp"]
         assert updated["team"]["members"] == [{"id": 1, "name": "tester"}]
         client.disconnect()
     finally:

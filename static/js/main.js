@@ -32,15 +32,17 @@ function joinSecretRealmTeam() {
     if (teamId) socket.emit("secret_realm_team_join", { team_id: teamId });
 }
 function leaveSecretRealmTeam() { socket.emit("secret_realm_team_leave"); }
-function challengeSecretRealm() {
+function challengeSecretRealm(action = "attack", skillId = null) {
     if (secretRealmChallengePending) return;
     secretRealmChallengePending = true;
     const button = document.getElementById("secret-realm-challenge-button");
     if (button) {
         button.disabled = true;
-        button.textContent = "正在交锋…";
+        button.textContent = action === "skill" ? "灵技施展中…" : "正在交锋…";
     }
-    socket.emit("secret_realm_challenge");
+    const payload = { action };
+    if (skillId) payload.skill_id = skillId;
+    socket.emit("secret_realm_challenge", payload);
     secretRealmChallengeTimer = setTimeout(() => {
         if (!secretRealmChallengePending) return;
         clearSecretRealmChallengePending();

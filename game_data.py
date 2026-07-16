@@ -199,6 +199,7 @@ MERIDIANS = {
 # ═══════════════ 炼丹配方 ═══════════════
 RECIPES = {
     "huiqi_dan":   {"name": "回气丹",     "ingredients": {"lingcao": 3},                                  "output": "huiqi_dan",   "output_count": 1, "req_realm": 1},
+    "huixi_dan":   {"name": "回灵丹",     "ingredients": {"lingcao": 2, "wanling_guo": 1},              "output": "huixi_dan",   "output_count": 1, "req_realm": 2},
     "huichun_dan": {"name": "回春丹",     "ingredients": {"lingcao": 2, "bingling_cao": 1},               "output": "huichun_dan", "output_count": 1, "req_realm": 3},
     "xuming_dan":  {"name": "续命丹",     "ingredients": {"bingling_cao": 2, "huoling_hua": 1, "lingcao": 2}, "output": "xuming_dan", "output_count": 1, "req_realm": 5},
     "peiyuan_dan": {"name": "培元丹",     "ingredients": {"huoling_hua": 2, "lingcao": 1},               "output": "peiyuan_dan", "output_count": 1, "req_realm": 4},
@@ -576,6 +577,7 @@ MONSTERS = {
 ITEMS = {
     # ── 丹药·恢复气血 ──
     "huiqi_dan":     {"name": "回气丹",       "desc": "恢复30气血",                       "type": "consumable", "effect": "heal",         "value": 30,   "price": 15},
+    "huixi_dan":     {"name": "回灵丹",       "desc": "恢复30灵力",                       "type": "consumable", "effect": "mp",           "value": 30,   "price": 25},
     "huichun_dan":   {"name": "回春丹",       "desc": "恢复80气血",                       "type": "consumable", "effect": "heal",         "value": 80,   "price": 40},
     "xuming_dan":    {"name": "续命丹",       "desc": "恢复200气血",                      "type": "consumable", "effect": "heal",         "value": 200,  "price": 120},
     "jiuzhuan_dan":  {"name": "九转还魂丹",   "desc": "气血完全恢复",                     "type": "consumable", "effect": "heal_full",    "value": 0,    "price": 350},

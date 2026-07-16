@@ -200,6 +200,63 @@ function createSecretRealmHealthCard({ role, label, name, current, max, variant,
     return card;
 }
 
+function createSecretRealmManaBar(player) {
+    const wrap = document.createElement("div");
+    wrap.className = "secret-realm-mana";
+    const labels = document.createElement("div");
+    labels.className = "secret-realm-health-labels";
+    const label = document.createElement("span");
+    label.textContent = "灵力 / MP";
+    const value = document.createElement("strong");
+    value.textContent = `${player.mp ?? 0} / ${player.max_mp ?? 0}`;
+    labels.append(label, value);
+    const track = document.createElement("div");
+    track.className = "secret-realm-mana-track";
+    const fill = document.createElement("div");
+    fill.className = "secret-realm-mana-fill";
+    fill.style.width = `${player.max_mp ? Math.max(0, Math.round((player.mp || 0) / player.max_mp * 100)) : 0}%`;
+    track.appendChild(fill);
+    wrap.append(labels, track);
+    return wrap;
+}
+
+function createSecretRealmSkillPanel(data, player, disabled) {
+    const panel = document.createElement("section");
+    panel.className = "secret-realm-skill-panel";
+    const heading = document.createElement("div");
+    heading.className = "secret-realm-section-heading";
+    const title = document.createElement("h4");
+    title.textContent = "斩妖灵技";
+    const caption = document.createElement("span");
+    caption.textContent = `${data.skills?.length || 0} 项已装备技能`;
+    heading.append(title, caption);
+    panel.appendChild(heading);
+    const skills = document.createElement("div");
+    skills.className = "secret-realm-skill-grid";
+    (data.skills || []).forEach(skill => {
+        const cost = Number(skill.skill?.mp_cost || 0);
+        const button = document.createElement("button");
+        button.className = "secret-realm-skill";
+        button.type = "button";
+        button.disabled = disabled || (player.mp || 0) < cost;
+        button.onclick = () => challengeSecretRealm("skill", skill.tech_id);
+        const name = document.createElement("strong");
+        name.textContent = skill.skill?.name || skill.name || skill.tech_id;
+        const meta = document.createElement("span");
+        meta.textContent = `${cost} MP · ${skill.skill?.desc || "消耗灵力施展"}`;
+        button.append(name, meta);
+        skills.appendChild(button);
+    });
+    if (!skills.children.length) {
+        const empty = document.createElement("p");
+        empty.className = "secret-realm-skill-empty";
+        empty.textContent = "尚未掌握可用灵技，先用普通攻击积累战果。";
+        skills.appendChild(empty);
+    }
+    panel.appendChild(skills);
+    return panel;
+}
+
 function createSecretRealmTeamPanel(data) {
     const panel = document.createElement("section");
     panel.className = "secret-realm-team-panel";
@@ -266,7 +323,7 @@ function renderSecretRealm(data) {
     const body = document.getElementById("secret-realm-body");
     body.replaceChildren();
     const boss = data.boss || {};
-    const player = data.player || { hp: 0, max_hp: 0 };
+    const player = data.player || { hp: 0, max_hp: 0, mp: 0, max_mp: 0 };
     const entriesRemaining = data.entries_remaining ?? 0;
     const isDefeated = boss.hp <= 0;
 
@@ -320,6 +377,22 @@ function renderSecretRealm(data) {
     );
     shell.appendChild(battlefield);
 
+    const manaPanel = document.createElement("section");
+    manaPanel.className = "secret-realm-resource-panel";
+    manaPanel.appendChild(createSecretRealmManaBar(player));
+    shell.appendChild(manaPanel);
+
+    const actionDisabled = entriesRemaining <= 0 || isDefeated || player.hp <= 0 || secretRealmChallengePending || !data.team;
+    shell.appendChild(createSecretRealmSkillPanel(data, player, actionDisabled));
+
+    const defend = document.createElement("button");
+    defend.className = "btn secret-realm-defend";
+    defend.type = "button";
+    defend.textContent = "结阵防御 · 恢复气血并减免反击";
+    defend.disabled = actionDisabled;
+    defend.onclick = () => challengeSecretRealm("defend");
+    shell.appendChild(defend);
+
     const rules = document.createElement("div");
     rules.className = "secret-realm-rule-note";
     rules.textContent = isDefeated ? "首领已伏诛，秘境将在下周轮换。" : "每次出击都会承受反击；战斗中不限出击次数，死亡或击杀首领才消耗入场次数。";
@@ -329,7 +402,7 @@ function renderSecretRealm(data) {
     action.id = "secret-realm-challenge-button";
     action.className = "btn secret-realm-challenge";
     action.textContent = isDefeated ? "本周首领已伏诛" : "出击 · 继续鏖战";
-    action.disabled = entriesRemaining <= 0 || isDefeated || player.hp <= 0 || secretRealmChallengePending || !data.team;
+    action.disabled = actionDisabled;
     action.onclick = challengeSecretRealm;
     shell.appendChild(action);
     body.appendChild(shell);
@@ -620,6 +693,7 @@ function toggleShop() {
 function renderShop() {
     const shopItems = [
         { id: "huiqi_dan",     name: "回气丹",     desc: "恢复30气血",       price: 15,  cat: "丹药" },
+        { id: "huixi_dan",     name: "回灵丹",     desc: "恢复30灵力",       price: 25,  cat: "丹药" },
         { id: "huichun_dan",   name: "回春丹",     desc: "恢复80气血",       price: 40,  cat: "丹药" },
         { id: "peiyuan_dan",   name: "培元丹",     desc: "获得50修为",       price: 60,  cat: "丹药" },
         { id: "dingdan",       name: "凝神定魄丹", desc: "下次战斗伤害+30%", price: 150, cat: "丹药" },
