@@ -55,6 +55,7 @@ _MIGRATIONS = [
     (16, "mp",               "characters", "INTEGER DEFAULT 50"),
     (17, "max_mp",           "characters", "INTEGER DEFAULT 50"),
     (18, "settlement_claimed", "secret_realm_runs", "INTEGER DEFAULT 0"),
+    (19, "titles", "characters", "TEXT DEFAULT '[]'"),
 ]
 
 
@@ -119,6 +120,20 @@ def init_db():
                 week_id TEXT PRIMARY KEY,
                 hp INTEGER NOT NULL,
                 max_hp INTEGER NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS sect_bosses (
+                week_id TEXT PRIMARY KEY,
+                hp INTEGER NOT NULL,
+                max_hp INTEGER NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS sect_boss_runs (
+                week_id TEXT NOT NULL,
+                user_id INTEGER NOT NULL,
+                damage INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (week_id, user_id),
+                FOREIGN KEY (user_id) REFERENCES users(id)
             );
         """)
 
@@ -315,8 +330,19 @@ def claim_secret_realm_settlement(user_id, week_id):
             "UPDATE secret_realm_runs SET settlement_claimed = 1 WHERE week_id = ? AND user_id = ?",
             (week_id, user_id),
         )
+        title_reward = None
+        if rank == 1:
+            title_reward = f"赤焰征服者·{week_id}"
+            char = conn.execute("SELECT titles FROM characters WHERE user_id = ?", (user_id,)).fetchone()
+            titles = json.loads(char["titles"]) if char and char["titles"] else []
+            if title_reward not in titles:
+                titles.append(title_reward)
+                conn.execute("UPDATE characters SET titles = ? WHERE user_id = ?", (json.dumps(titles), user_id))
         conn.execute("UPDATE characters SET gold = gold + ? WHERE user_id = ?", (gold_reward, user_id))
-    return {"ok": True, "week_id": week_id, "rank": rank, "gold_reward": gold_reward}
+    result = {"ok": True, "week_id": week_id, "rank": rank, "gold_reward": gold_reward}
+    if title_reward:
+        result["title_reward"] = title_reward
+    return result
 
 
 def get_pending_secret_realm_settlements(user_id, current_week_id):
@@ -326,6 +352,80 @@ def get_pending_secret_realm_settlements(user_id, current_week_id):
                WHERE user_id = ? AND contribution > 0 AND settlement_claimed = 0 AND week_id < ?
                ORDER BY week_id DESC""",
             (user_id, current_week_id),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def get_character_titles(user_id):
+    char = get_character(user_id)
+    if not char or not char["titles"]:
+        return []
+    return json.loads(char["titles"])
+
+
+def get_sect_boss(week_id, max_hp=1200):
+    with get_db() as conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO sect_bosses (week_id, hp, max_hp) VALUES (?, ?, ?)",
+            (week_id, max_hp, max_hp),
+        )
+        row = conn.execute("SELECT hp, max_hp FROM sect_bosses WHERE week_id = ?", (week_id,)).fetchone()
+    return dict(row)
+
+
+def apply_sect_boss_damage(user_id, week_id, requested_damage, max_hp=1200):
+    """Atomically apply one player's contribution to the shared sect boss."""
+    with get_db() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        conn.execute(
+            "INSERT OR IGNORE INTO sect_bosses (week_id, hp, max_hp) VALUES (?, ?, ?)",
+            (week_id, max_hp, max_hp),
+        )
+        conn.execute(
+            "INSERT OR IGNORE INTO sect_boss_runs (week_id, user_id) VALUES (?, ?)",
+            (week_id, user_id),
+        )
+        boss = conn.execute("SELECT hp FROM sect_bosses WHERE week_id = ?", (week_id,)).fetchone()
+        if boss["hp"] <= 0:
+            return {"ok": False, "reason": "boss_defeated"}
+
+        damage = min(max(1, int(requested_damage)), boss["hp"])
+        remaining_hp = boss["hp"] - damage
+        defeated = remaining_hp == 0
+        conn.execute("UPDATE sect_bosses SET hp = ? WHERE week_id = ?", (remaining_hp, week_id))
+        conn.execute(
+            "UPDATE sect_boss_runs SET damage = damage + ? WHERE week_id = ? AND user_id = ?",
+            (damage, week_id, user_id),
+        )
+        char = conn.execute(
+            "SELECT sect_contrib, inventory FROM characters WHERE user_id = ?", (user_id,)
+        ).fetchone()
+        if char:
+            inventory = json.loads(char["inventory"]) if char["inventory"] else {}
+            if defeated:
+                inventory["zongmen_lingpai"] = inventory.get("zongmen_lingpai", 0) + 1
+            conn.execute(
+                "UPDATE characters SET sect_contrib = ?, inventory = ? WHERE user_id = ?",
+                (char["sect_contrib"] + damage, json.dumps(inventory), user_id),
+            )
+
+    return {
+        "ok": True,
+        "damage": damage,
+        "boss_hp": remaining_hp,
+        "defeated": defeated,
+        "reward_granted": defeated,
+    }
+
+
+def get_sect_boss_leaderboard(week_id, limit=10):
+    with get_db() as conn:
+        rows = conn.execute(
+            """SELECT c.name, r.damage FROM sect_boss_runs r
+               JOIN characters c ON c.user_id = r.user_id
+               WHERE r.week_id = ? AND r.damage > 0
+               ORDER BY r.damage DESC, c.name ASC LIMIT ?""",
+            (week_id, limit),
         ).fetchall()
     return [dict(row) for row in rows]
 
