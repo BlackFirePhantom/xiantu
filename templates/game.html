@@ -98,6 +98,7 @@
                 <button class="btn btn-leaderboard" onclick="showLeaderboard()">天骄榜 <span class="shortcut-hint">L</span></button>
                   <button class="btn btn-fight" onclick="showSecretRealm()">轮回秘境</button>
                 <button class="btn btn-fight" onclick="showSectBoss()">宗门首领</button>
+                <button class="btn btn-fight" onclick="showArena()">论道大会</button>
             </div>
 
             <!-- 战斗面板（回合制） -->
@@ -195,6 +196,23 @@
             <span class="modal-close" onclick="this.closest('.modal').style.display='none'">&times;</span>
             <h3>宗门首领</h3>
             <div id="sect-boss-body" aria-live="polite"></div>
+        </div>
+    </div>
+
+    <div id="arena-modal" class="modal" role="dialog" aria-modal="true" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
+        <div class="modal-content arena-modal-content" style="max-width: 900px; width: 90%;">
+            <span class="modal-close" onclick="this.closest('.modal').style.display='none'">&times;</span>
+            <h3>论道大会</h3>
+            <div id="arena-body" aria-live="polite"></div>
+        </div>
+    </div>
+
+    <div id="arena-combat-modal" class="modal" role="dialog" aria-modal="true" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
+        <div class="modal-content arena-combat-modal-content" style="max-width: 600px;">
+            <span class="modal-close" onclick="this.closest('.modal').style.display='none'">&times;</span>
+            <h3>论道战报详情</h3>
+            <div id="arena-combat-body" style="max-height: 400px; overflow-y: auto; text-align: left; background: #16181d; padding: 15px; border-radius: 4px; font-family: monospace; white-space: pre-wrap; line-height: 1.6; color: #abb2bf;"></div>
+            <button class="btn btn-sm" style="margin-top: 15px; float: right;" onclick="this.closest('.modal').style.display='none'">关闭</button>
         </div>
     </div>
 

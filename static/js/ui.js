@@ -1532,3 +1532,209 @@ function addCombatLogLine(logDiv, line, type) {
     div.textContent = line;
     logDiv.appendChild(div);
 }
+
+
+let arenaActiveTab = "leaderboard";
+let lastArenaData = null;
+
+function switchArenaTab(tab) {
+    arenaActiveTab = tab;
+    if (lastArenaData) {
+        renderArena(lastArenaData);
+    }
+}
+
+function renderArena(data) {
+    lastArenaData = data;
+    const body = document.getElementById("arena-body");
+    body.innerHTML = "";
+
+    const grid = document.createElement("div");
+    grid.className = "arena-grid";
+
+    // Column 1: Stats & Defense config
+    const col1 = document.createElement("div");
+    col1.className = "arena-card";
+    
+    let col1Html = `
+        <div class="arena-card-title">我的论道战绩</div>
+        <div class="arena-profile-stat">
+            <div class="arena-stat-item">
+                <label>论道积分</label>
+                <span>${data.score}</span>
+            </div>
+            <div class="arena-stat-item">
+                <label>剩余挑战</label>
+                <span>${data.challenges_remaining} 次</span>
+            </div>
+            <div class="arena-stat-item">
+                <label>胜场</label>
+                <span>${data.wins}</span>
+            </div>
+            <div class="arena-stat-item">
+                <label>败场</label>
+                <span>${data.losses}</span>
+            </div>
+        </div>
+        
+        <div class="arena-defense-setup">
+            <div class="arena-card-title" style="margin-top:15px; margin-bottom:5px;">防守套路配置</div>
+            <h5 style="margin: 0 0 10px 0; color: #89979e; font-size:11px; font-weight: normal;">配置 3 个斗法释放的灵技</h5>
+    `;
+    
+    for (let i = 1; i <= 3; i++) {
+        col1Html += `
+            <div class="arena-defense-slot" style="margin-bottom: 8px;">
+                <span style="font-size:12px; color:#c8d7df; width: 45px;">第${i}手</span>
+                <select id="arena-defense-select-${i}" class="arena-defense-select" onchange="setArenaDefense()">
+                    <option value="">普通攻击</option>
+                    ${data.all_skills.map(s => `
+                        <option value="${s.tech_id}" ${data.defense_skills[i-1] === s.tech_id ? "selected" : ""}>${s.name}</option>
+                    `).join("")}
+                </select>
+            </div>
+        `;
+    }
+    col1Html += `</div>`;
+    col1.innerHTML = col1Html;
+
+    // Column 2: Opponent matching
+    const col2 = document.createElement("div");
+    col2.className = "arena-card";
+    
+    let col2Html = `<div class="arena-card-title">寻敌挑战</div><div class="arena-opponents-list">`;
+    if (data.opponents.length === 0) {
+        col2Html += `<div class="secret-realm-empty">修仙界暂时没有其他修士可与之论道。</div>`;
+    } else {
+        data.opponents.forEach(opp => {
+            col2Html += `
+                <div class="arena-opponent-item">
+                    <div class="arena-opponent-avatar">${opp.name[0]}</div>
+                    <div class="arena-opponent-info">
+                        <h4>${opp.name}</h4>
+                        <p style="margin: 3px 0 0 0; color: #89979e; font-size: 11px;">境界: <strong style="color: #dfc28a;">${opp.realm || "凡人"}</strong></p>
+                        <p style="margin: 3px 0 0 0; color: #89979e; font-size: 11px;">论道积分: <strong style="color: #dfc28a;">${opp.arena_score}</strong></p>
+                    </div>
+                    <button class="btn btn-sm btn-fight" onclick="challengeArena(${opp.user_id})" ${data.challenges_remaining <= 0 ? "disabled" : ""}>挑战</button>
+                </div>
+            `;
+        });
+    }
+    col2Html += `</div>`;
+    col2.innerHTML = col2Html;
+
+    // Column 3: Leaderboard / Battle Logs
+    const col3 = document.createElement("div");
+    col3.className = "arena-card";
+    col3.style.padding = "10px";
+    
+    const tabHeaders = document.createElement("div");
+    tabHeaders.className = "arena-rankings-logs-tabs";
+    
+    const rankTab = document.createElement("button");
+    rankTab.className = "arena-tab-btn" + (arenaActiveTab === "leaderboard" ? " active" : "");
+    rankTab.textContent = "天骄论道榜";
+    rankTab.onclick = () => switchArenaTab("leaderboard");
+    
+    const logTab = document.createElement("button");
+    logTab.className = "arena-tab-btn" + (arenaActiveTab === "logs" ? " active" : "");
+    logTab.textContent = "论道记录";
+    logTab.onclick = () => switchArenaTab("logs");
+    
+    tabHeaders.append(rankTab, logTab);
+    col3.appendChild(tabHeaders);
+    
+    const tabContent = document.createElement("div");
+    tabContent.id = "arena-tab-content";
+    
+    if (arenaActiveTab === "leaderboard") {
+        let rankHtml = `
+            <table class="lb-table" style="margin-top:5px;">
+                <thead>
+                    <tr>
+                        <th style="padding: 6px; font-size:11px;">排名</th>
+                        <th style="padding: 6px; font-size:11px;">修士</th>
+                        <th style="padding: 6px; font-size:11px; text-align:right;">积分</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+        if (data.leaderboard.length === 0) {
+            rankHtml += `<tr><td colspan="3" style="text-align:center; color:#89979e; font-size:11px; padding:10px;">暂无排名</td></tr>`;
+        } else {
+            data.leaderboard.forEach((r, idx) => {
+                rankHtml += `
+                    <tr>
+                        <td style="padding: 6px; font-size:12px;" class="lb-rank">#${idx + 1}</td>
+                        <td style="padding: 6px; font-size:12px; color:#c8d7df;">${r.name}<br/><small style="color:#7f98a2; font-size:9px;">${r.realm || "凡人"}</small></td>
+                        <td style="padding: 6px; font-size:12px; text-align:right; color:#dfc28a; font-family:monospace;">${r.arena_score}</td>
+                    </tr>
+                `;
+            });
+        }
+        rankHtml += `</tbody></table>`;
+        tabContent.innerHTML = rankHtml;
+    } else {
+        let logHtml = `<div class="arena-logs-list" style="max-height: 380px; overflow-y: auto;">`;
+        if (data.logs.length === 0) {
+            logHtml += `<div class="secret-realm-empty" style="border:none; padding:20px;">暂无斗法记录</div>`;
+        } else {
+            data.logs.forEach(l => {
+                const myName = document.getElementById("char-name").textContent.trim();
+                const isIWinner = l.winner_id === l.challenger_id ? (l.challenger_name === myName) : (l.defender_name === myName);
+                const roleText = l.challenger_name === myName ? "挑战" : "防守";
+                const oppName = l.challenger_name === myName ? l.defender_name : l.challenger_name;
+                const outcomeClass = isIWinner ? "arena-log-win" : "arena-log-lose";
+                const outcomeText = isIWinner ? "胜" : "败";
+                
+                logHtml += `
+                    <div class="arena-log-item">
+                        <span style="color:#89979e;">[${roleText}]</span> 对阵 <strong style="color:#cbd9de;">${oppName}</strong> 
+                        <span class="${outcomeClass}" style="font-weight:bold; margin-left:4px;">${outcomeText}</span>
+                        <span style="color:#dfc28a; font-family:monospace; margin-left:4px;">(${isIWinner ? "+" : "-"}${l.score_change})</span>
+                        <a onclick="viewArenaLogDetail(${l.id})">回放</a>
+                    </div>
+                `;
+            });
+        }
+        logHtml += `</div>`;
+        tabContent.innerHTML = logHtml;
+    }
+    col3.appendChild(tabContent);
+
+    grid.append(col1, col2, col3);
+    body.appendChild(grid);
+}
+
+function viewArenaLogDetail(logId) {
+    if (!lastArenaData || !lastArenaData.logs) return;
+    const log = lastArenaData.logs.find(l => l.id === logId);
+    if (!log) return;
+    
+    let combatLogLines = [];
+    try {
+        combatLogLines = JSON.parse(log.combat_log);
+    } catch (e) {
+        combatLogLines = [log.combat_log];
+    }
+    
+    const body = document.getElementById("arena-combat-body");
+    body.innerHTML = combatLogLines.join("\n");
+    document.getElementById("arena-combat-modal").style.display = "flex";
+}
+
+function showArenaCombatResult(data) {
+    let logLines = [];
+    try {
+        logLines = typeof data.log === "string" ? JSON.parse(data.log) : data.log;
+    } catch (e) {
+        logLines = [data.log];
+    }
+    
+    const body = document.getElementById("arena-combat-body");
+    body.innerHTML = logLines.join("\n");
+    document.getElementById("arena-combat-modal").style.display = "flex";
+    
+    const isWinner = data.winner_id === lastArenaData.my_id;
+    addLog(`【论道结果】你发起了挑战，战绩：${isWinner ? "【大胜】" : "【败北】"}，积分变动：${isWinner ? "+" : "-"}${data.score_change}。`, isWinner ? "success" : "error");
+}

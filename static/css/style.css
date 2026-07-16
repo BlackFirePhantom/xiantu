@@ -1810,3 +1810,168 @@ a:focus-visible {
 .mp-bar {
     z-index: 2;
 }
+
+/* ===== 论道大会 (Arena) 样式 ===== */
+.arena-grid {
+    display: grid;
+    grid-template-columns: 260px 1fr 280px;
+    gap: 16px;
+    margin-top: 10px;
+    align-items: start;
+}
+.arena-card {
+    background: rgba(14, 23, 31, 0.75);
+    border: 1px solid rgba(228, 145, 98, 0.25);
+    border-radius: 10px;
+    padding: 14px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+}
+.arena-card-title {
+    font-family: var(--font-serif);
+    color: #dfc28a;
+    font-size: 14px;
+    font-weight: bold;
+    border-bottom: 1px dashed rgba(228, 145, 98, 0.2);
+    padding-bottom: 6px;
+    margin-bottom: 10px;
+    letter-spacing: 1px;
+}
+.arena-profile-stat {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-bottom: 12px;
+}
+.arena-stat-item {
+    background: rgba(9, 15, 20, 0.52);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 6px;
+    padding: 8px;
+    text-align: center;
+}
+.arena-stat-item label {
+    display: block;
+    color: #89979e;
+    font-size: 10px;
+    margin-bottom: 2px;
+}
+.arena-stat-item span {
+    font-family: var(--font-mono);
+    color: #f4dfbe;
+    font-size: 15px;
+    font-weight: bold;
+}
+.arena-defense-setup h5 {
+    color: #cbd9de;
+    font-size: 12px;
+    margin: 10px 0 6px 0;
+}
+.arena-defense-slot {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+.arena-defense-select {
+    flex: 1;
+    height: 32px;
+    background: #090f14;
+    border: 1px solid rgba(228, 145, 98, 0.3);
+    border-radius: 4px;
+    color: #cbd9de;
+    font-size: 12px;
+    padding: 0 6px;
+}
+.arena-opponents-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.arena-opponent-item {
+    display: grid;
+    grid-template-columns: 50px 1fr auto;
+    align-items: center;
+    gap: 12px;
+    background: linear-gradient(145deg, rgba(28, 42, 53, 0.6), rgba(16, 23, 31, 0.8));
+    border: 1px solid rgba(228, 145, 98, 0.2);
+    border-radius: 8px;
+    padding: 12px;
+    transition: all 0.25s ease;
+}
+.arena-opponent-item:hover {
+    border-color: rgba(228, 145, 98, 0.6);
+    box-shadow: 0 4px 15px rgba(228, 145, 98, 0.15);
+    transform: translateY(-1px);
+}
+.arena-opponent-avatar {
+    width: 46px;
+    height: 46px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #2d3e4b, #121c24);
+    border: 1px solid rgba(228, 145, 98, 0.4);
+    display: grid;
+    place-items: center;
+    font-family: var(--font-serif);
+    font-size: 20px;
+    color: #ffe0bc;
+}
+.arena-opponent-info h4 {
+    margin: 0;
+    font-family: var(--font-serif);
+    color: #ffe2c9;
+    font-size: 14px;
+}
+.arena-opponent-info p {
+    margin: 3px 0 0 0;
+    color: #89979e;
+    font-size: 11px;
+}
+.arena-opponent-info p strong {
+    color: #dfc28a;
+    margin-left: 4px;
+}
+.arena-rankings-logs-tabs {
+    display: flex;
+    border-bottom: 1px solid rgba(228, 145, 98, 0.2);
+    margin-bottom: 10px;
+}
+.arena-tab-btn {
+    flex: 1;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: #89979e;
+    font-family: var(--font-serif);
+    font-size: 12px;
+    padding: 6px;
+    cursor: pointer;
+    text-align: center;
+}
+.arena-tab-btn.active {
+    color: #dfc28a;
+    border-bottom-color: #dfc28a;
+}
+.arena-log-item {
+    font-size: 11px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    padding: 8px 4px;
+    line-height: 1.5;
+}
+.arena-log-item a {
+    color: #8fc5df;
+    cursor: pointer;
+    margin-left: 6px;
+    text-decoration: underline;
+}
+.arena-log-item a:hover {
+    color: #bce5f7;
+}
+.arena-log-win { color: #8ed9b4; }
+.arena-log-lose { color: #c4565b; }
+
+@media (max-width: 900px) {
+    .arena-grid {
+        grid-template-columns: 1fr;
+    }
+}
+

@@ -129,3 +129,12 @@ socket.on("auction_update", (data) => {
     }
 });
 socket.on("auction_log", (data) => addLog(data.text, data.type || "shop"));
+
+// 论道大会事件
+socket.on("arena_state", (data) => renderArena(data));
+socket.on("arena_combat_result", (data) => showArenaCombatResult(data));
+socket.on("arena_state_changed", () => {
+    if (document.getElementById("arena-modal").style.display !== "none") {
+        socket.emit("get_arena");
+    }
+});

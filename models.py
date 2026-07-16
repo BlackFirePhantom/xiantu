@@ -56,6 +56,12 @@ _MIGRATIONS = [
     (17, "max_mp",           "characters", "INTEGER DEFAULT 50"),
     (18, "settlement_claimed", "secret_realm_runs", "INTEGER DEFAULT 0"),
     (19, "titles", "characters", "TEXT DEFAULT '[]'"),
+    (20, "arena_score", "characters", "INTEGER DEFAULT 1000"),
+    (21, "arena_wins", "characters", "INTEGER DEFAULT 0"),
+    (22, "arena_losses", "characters", "INTEGER DEFAULT 0"),
+    (23, "arena_challenges_today", "characters", "INTEGER DEFAULT 0"),
+    (24, "arena_last_challenge_date", "characters", "TEXT DEFAULT NULL"),
+    (25, "arena_defense_skills", "characters", "TEXT DEFAULT '[]'"),
 ]
 
 
@@ -134,6 +140,18 @@ def init_db():
                 damage INTEGER NOT NULL DEFAULT 0,
                 PRIMARY KEY (week_id, user_id),
                 FOREIGN KEY (user_id) REFERENCES users(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS arena_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                challenger_id INTEGER NOT NULL,
+                defender_id INTEGER NOT NULL,
+                challenger_name TEXT NOT NULL,
+                defender_name TEXT NOT NULL,
+                winner_id INTEGER NOT NULL,
+                score_change INTEGER NOT NULL,
+                combat_log TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         """)
 
@@ -547,3 +565,103 @@ def get_online_count():
     with get_db() as conn:
         row = conn.execute("SELECT COUNT(*) as cnt FROM characters").fetchone()
         return row["cnt"] if row else 0
+
+
+def get_arena_opponents(user_id):
+    with get_db() as conn:
+        char = conn.execute("SELECT arena_score FROM characters WHERE user_id = ?", (user_id,)).fetchone()
+        if not char:
+            return []
+        score = char["arena_score"]
+        opponents = conn.execute(
+            """SELECT user_id, name, level, arena_score, weapon, armor, accessory, spirit_root
+               FROM characters
+               WHERE user_id != ?
+               ORDER BY abs(arena_score - ?) ASC
+               LIMIT 3""",
+            (user_id, score),
+        ).fetchall()
+        return [dict(row) for row in opponents]
+
+
+def update_arena_result(challenger_id, defender_id, winner_id, score_change, log_text):
+    from datetime import date
+    today_str = date.today().isoformat()
+    with get_db() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        
+        char = conn.execute("SELECT arena_challenges_today, arena_last_challenge_date FROM characters WHERE user_id = ?", (challenger_id,)).fetchone()
+        if not char:
+            return {"ok": False, "reason": "character_missing"}
+            
+        challenges = char["arena_challenges_today"]
+        if char["arena_last_challenge_date"] != today_str:
+            challenges = 0
+            
+        challenges += 1
+        
+        challenger = conn.execute("SELECT name, arena_score FROM characters WHERE user_id = ?", (challenger_id,)).fetchone()
+        defender = conn.execute("SELECT name, arena_score FROM characters WHERE user_id = ?", (defender_id,)).fetchone()
+        
+        if not challenger or not defender:
+            return {"ok": False, "reason": "character_missing"}
+            
+        challenger_score = challenger["arena_score"]
+        defender_score = defender["arena_score"]
+        
+        if winner_id == challenger_id:
+            new_challenger_score = max(100, challenger_score + score_change)
+            new_defender_score = max(100, defender_score - score_change)
+            
+            conn.execute(
+                "UPDATE characters SET arena_score = ?, arena_wins = arena_wins + 1, arena_challenges_today = ?, arena_last_challenge_date = ? WHERE user_id = ?",
+                (new_challenger_score, challenges, today_str, challenger_id)
+            )
+            conn.execute(
+                "UPDATE characters SET arena_score = ?, arena_losses = arena_losses + 1 WHERE user_id = ?",
+                (new_defender_score, defender_id)
+            )
+        else:
+            new_challenger_score = max(100, challenger_score - score_change)
+            new_defender_score = max(100, defender_score + (score_change // 2))
+            
+            conn.execute(
+                "UPDATE characters SET arena_score = ?, arena_losses = arena_losses + 1, arena_challenges_today = ?, arena_last_challenge_date = ? WHERE user_id = ?",
+                (new_challenger_score, challenges, today_str, challenger_id)
+            )
+            conn.execute(
+                "UPDATE characters SET arena_score = ?, arena_wins = arena_wins + 1 WHERE user_id = ?",
+                (new_defender_score, defender_id)
+            )
+            
+        conn.execute(
+            """INSERT INTO arena_logs (challenger_id, defender_id, challenger_name, defender_name, winner_id, score_change, combat_log)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (challenger_id, defender_id, challenger["name"], defender["name"], winner_id, score_change, json.dumps(log_text))
+        )
+        return {"ok": True}
+
+
+def get_arena_logs(user_id):
+    with get_db() as conn:
+        logs = conn.execute(
+            """SELECT id, challenger_id, defender_id, challenger_name, defender_name, winner_id, score_change, combat_log, created_at
+               FROM arena_logs
+               WHERE challenger_id = ? OR defender_id = ?
+               ORDER BY id DESC
+               LIMIT 10""",
+            (user_id, user_id),
+        ).fetchall()
+        return [dict(row) for row in logs]
+
+
+def get_arena_leaderboard(limit=10):
+    with get_db() as conn:
+        rows = conn.execute(
+            """SELECT user_id, name, level, arena_score, arena_wins, arena_losses, spirit_root
+               FROM characters
+               ORDER BY arena_score DESC, arena_wins DESC
+               LIMIT ?""",
+            (limit,),
+        ).fetchall()
+        return [dict(row) for row in rows]

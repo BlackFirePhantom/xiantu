@@ -25,6 +25,26 @@ function showSectBoss() {
     socket.emit("get_sect_boss");
 }
 
+function showArena() {
+    document.getElementById("arena-modal").style.display = "flex";
+    socket.emit("get_arena");
+}
+
+function challengeArena(opponentId) {
+    socket.emit("arena_challenge", { opponent_id: opponentId });
+}
+
+function setArenaDefense() {
+    const skillIds = [];
+    for (let i = 1; i <= 3; i++) {
+        const select = document.getElementById(`arena-defense-select-${i}`);
+        if (select && select.value) {
+            skillIds.push(select.value);
+        }
+    }
+    socket.emit("arena_set_defense", { skill_ids: skillIds });
+}
+
 function createSecretRealmTeam() { socket.emit("secret_realm_team_create"); }
 function joinSecretRealmTeam() {
     const input = document.getElementById("secret-realm-team-code");
