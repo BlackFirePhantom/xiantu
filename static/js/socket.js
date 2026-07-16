@@ -6,7 +6,23 @@ let currentForture = null;
 
 // ═══════════════ Socket 事件绑定 ═══════════════
 
-socket.on("connect", () => socket.emit("get_state"));
+socket.on("connect", () => {
+    socket.emit("get_state");
+    const realmModal = document.getElementById("secret-realm-modal");
+    if (realmModal && realmModal.style.display !== "none") socket.emit("get_secret_realm");
+});
+
+socket.on("disconnect", () => {
+    if (typeof clearSecretRealmChallengePending === "function") clearSecretRealmChallengePending();
+    const button = document.getElementById("secret-realm-challenge-button");
+    if (button && button.textContent === "正在交锋…") {
+        button.disabled = false;
+        button.textContent = "连接中断，点击重试";
+    }
+    addLog("秘境连接已中断，恢复连接后可以重试。", "error");
+});
+
+socket.on("connect_error", () => addLog("无法连接到仙途服务器。", "error"));
 
 socket.on("game_state", (data) => {
     gameState = data;
@@ -33,7 +49,7 @@ socket.on("player_moved", (data) => addLog(`${data.player} 御剑前往了 ${dat
 socket.on("chat_msg", (data) => addChat(data.from, data.text));
 socket.on("leaderboard", (data) => renderLeaderboard(data.data));
 socket.on("secret_realm_state", (data) => {
-    secretRealmChallengePending = false;
+    clearSecretRealmChallengePending();
     renderSecretRealm(data);
 });
 socket.on("secret_realm_team_changed", () => socket.emit("get_secret_realm"));

@@ -173,6 +173,48 @@ def test_secret_realm_socket_state_shows_player_hp_and_consumes_entry(tmp_path, 
             game_state.dirty_users.clear()
 
 
+def test_secret_realm_challenge_returns_error_state_when_settlement_fails(tmp_path, monkeypatch):
+    monkeypatch.setattr(models, "DB_PATH", str(tmp_path / "realm_socket_error.db"))
+    models.init_db()
+    with models.get_db() as conn:
+        conn.execute("INSERT INTO users (id, username, password_hash) VALUES (1, 'tester', 'unused')")
+        conn.execute(
+            "INSERT INTO characters (user_id, name, hp, max_hp, location) VALUES (1, 'tester', 100, 100, 'chiyan_forest')"
+        )
+
+    import handlers.secret_realm as realm_handlers
+    monkeypatch.setattr(realm_handlers, "_week_id", lambda: "2026-W29")
+    monkeypatch.setattr(
+        realm_handlers,
+        "resolve_secret_realm_boss_encounter",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("database unavailable")),
+    )
+    from app import app, socketio
+
+    with game_state.cache_lock:
+        game_state.character_cache.clear()
+        game_state.dirty_users.clear()
+    try:
+        flask_client = app.test_client()
+        with flask_client.session_transaction() as session:
+            session["user_id"] = 1
+            session["username"] = "tester"
+        client = socketio.test_client(app, flask_test_client=flask_client)
+        client.emit("secret_realm_challenge")
+        received = client.get_received()
+
+        messages = [event["args"][0] for event in received if event["name"] == "game_msg"]
+        states = [event["args"][0] for event in received if event["name"] == "secret_realm_state"]
+        assert messages[-1]["text"] == "秘境结算失败，请稍后重试。"
+        assert states[-1]["entries_remaining"] == EXPLORATION_LIMIT
+        client.disconnect()
+    finally:
+        reset_teams()
+        with game_state.cache_lock:
+            game_state.character_cache.clear()
+            game_state.dirty_users.clear()
+
+
 def test_secret_realm_records_are_isolated_by_week_and_share_one_boss(tmp_path, monkeypatch):
     monkeypatch.setattr(models, "DB_PATH", str(tmp_path / "realm.db"))
     models.init_db()

@@ -1,6 +1,7 @@
 """Socket.IO handlers for the weekly secret realm."""
 
 from datetime import date
+import logging
 
 from flask import session
 from flask_socketio import emit, join_room, leave_room
@@ -20,6 +21,9 @@ from models import (
     resolve_secret_realm_boss_encounter,
 )
 from .base import do_get_state
+
+
+logger = logging.getLogger("xiantu.secret_realm")
 
 
 def _week_id(today=None):
@@ -170,15 +174,21 @@ def register_secret_realm_handlers(socketio):
         stats = get_full_stats(char)
         damage = max(1, round(stats["atk"] * 3 * season["boss_damage_multiplier"]))
         game_state.save_cached_character(user_id)
-        result = resolve_secret_realm_boss_encounter(
-            user_id,
-            week_id,
-            player_damage=damage,
-            player_defense=stats["def"],
-            boss_attack=boss_config["attack"],
-            max_hp=boss_config["max_hp"],
-            entry_limit=EXPLORATION_LIMIT,
-        )
+        try:
+            result = resolve_secret_realm_boss_encounter(
+                user_id,
+                week_id,
+                player_damage=damage,
+                player_defense=stats["def"],
+                boss_attack=boss_config["attack"],
+                max_hp=boss_config["max_hp"],
+                entry_limit=EXPLORATION_LIMIT,
+            )
+        except Exception:
+            logger.exception("秘境出击结算失败 user_id=%s week_id=%s", user_id, week_id)
+            emit("game_msg", {"text": "秘境结算失败，请稍后重试。", "type": "error"})
+            _emit_state(user_id)
+            return
         if not result["ok"]:
             messages = {
                 "no_entries": "本周秘境入场次数已耗尽，无法继续挑战首领。",
