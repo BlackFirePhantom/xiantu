@@ -142,6 +142,64 @@ function renderState(s) {
     }
 }
 
+function renderSecretRealm(data) {
+    const body = document.getElementById("secret-realm-body");
+    body.replaceChildren();
+
+    const summary = document.createElement("p");
+    summary.textContent = `本周 ${data.week_id}｜探索 ${data.explorations}/${data.exploration_limit}｜个人贡献 ${data.contribution}`;
+    body.appendChild(summary);
+
+    const boss = document.createElement("p");
+    boss.textContent = `赤焰魔君：${data.boss.hp} / ${data.boss.max_hp} 气血｜你的伤害 ${data.boss_damage}`;
+    body.appendChild(boss);
+
+    const exploreButton = document.createElement("button");
+    exploreButton.className = "btn btn-sm";
+    exploreButton.textContent = "探索秘境";
+    exploreButton.disabled = data.explorations >= data.exploration_limit;
+    exploreButton.onclick = exploreSecretRealm;
+    body.appendChild(exploreButton);
+
+    const challengeButton = document.createElement("button");
+    challengeButton.className = "btn btn-sm btn-fight";
+    challengeButton.textContent = "挑战首领";
+    challengeButton.disabled = data.explorations < data.exploration_limit || data.boss.hp <= 0;
+    challengeButton.onclick = challengeSecretRealm;
+    body.appendChild(challengeButton);
+
+    const title = document.createElement("h4");
+    title.textContent = "本周贡献榜";
+    body.appendChild(title);
+    const list = document.createElement("ol");
+    (data.leaderboard || []).forEach(entry => {
+        const item = document.createElement("li");
+        item.textContent = `${entry.name}｜贡献 ${entry.contribution}｜伤害 ${entry.boss_damage}`;
+        list.appendChild(item);
+    });
+    if (!list.childElementCount) {
+        const empty = document.createElement("p");
+        empty.textContent = "尚无人踏入秘境。";
+        body.appendChild(empty);
+    } else {
+        body.appendChild(list);
+    }
+
+    const settlements = data.pending_settlements || [];
+    if (settlements.length) {
+        const settlementTitle = document.createElement("h4");
+        settlementTitle.textContent = "待领取周结算";
+        body.appendChild(settlementTitle);
+        settlements.forEach(settlement => {
+            const button = document.createElement("button");
+            button.className = "btn btn-sm";
+            button.textContent = `${settlement.week_id}（贡献 ${settlement.contribution}）领取奖励`;
+            button.onclick = () => claimSecretRealmSettlement(settlement.week_id);
+            body.appendChild(button);
+        });
+    }
+}
+
 // ═══════════════ 背包渲染 ═══════════════
 
 function renderInventory(items) {

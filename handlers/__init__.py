@@ -16,6 +16,7 @@ def init_handlers(socketio):
     from .adventure import register_adventure_handlers
     from .npc import register_npc_handlers
     from .auction import register_auction_handlers
+    from .secret_realm import register_secret_realm_handlers
 
     # 注册所有 Socket 路由与事件监听
     register_base_handlers(socketio)
@@ -27,3 +28,4 @@ def init_handlers(socketio):
     register_adventure_handlers(socketio)
     register_npc_handlers(socketio)
     register_auction_handlers(socketio)
+    register_secret_realm_handlers(socketio)
