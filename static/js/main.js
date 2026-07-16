@@ -15,7 +15,13 @@ function showSectBoss() {
     socket.emit("get_sect_boss");
 }
 
-function exploreSecretRealm() { socket.emit("secret_realm_explore"); }
+function createSecretRealmTeam() { socket.emit("secret_realm_team_create"); }
+function joinSecretRealmTeam() {
+    const input = document.getElementById("secret-realm-team-code");
+    const teamId = input ? input.value.trim() : "";
+    if (teamId) socket.emit("secret_realm_team_join", { team_id: teamId });
+}
+function leaveSecretRealmTeam() { socket.emit("secret_realm_team_leave"); }
 function challengeSecretRealm() {
     if (secretRealmChallengePending) return;
     secretRealmChallengePending = true;

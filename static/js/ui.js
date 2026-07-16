@@ -150,8 +150,60 @@ function renderSecretRealm(data) {
     const player = data.player || { hp: 0, max_hp: 0 };
     const hpPct = boss.max_hp ? Math.max(0, Math.round(boss.hp / boss.max_hp * 100)) : 0;
     const playerHpPct = player.max_hp ? Math.max(0, Math.round(player.hp / player.max_hp * 100)) : 0;
-    const entriesRemaining = data.entries_remaining ?? Math.max(0, data.exploration_limit - data.explorations);
+    const entriesRemaining = data.entries_remaining ?? 0;
     const isDefeated = boss.hp <= 0;
+
+    const teamPanel = document.createElement("section");
+    teamPanel.className = "secret-realm-team";
+    const teamTitle = document.createElement("div");
+    teamTitle.className = "secret-realm-team-title";
+    teamTitle.textContent = "秘境队伍";
+    teamPanel.appendChild(teamTitle);
+    if (data.team) {
+        const teamHeader = document.createElement("div");
+        teamHeader.className = "secret-realm-team-header";
+        teamHeader.textContent = `${data.team.id} · ${data.team.members.length}/${data.team.max_members} 人`;
+        teamPanel.appendChild(teamHeader);
+        const members = document.createElement("div");
+        members.className = "secret-realm-team-members";
+        data.team.members.forEach(member => {
+            const item = document.createElement("span");
+            item.className = "secret-realm-team-member";
+            item.textContent = `${member.name}${member.id === data.team.leader_id ? " · 队长" : ""}`;
+            members.appendChild(item);
+        });
+        teamPanel.appendChild(members);
+        const leaveButton = document.createElement("button");
+        leaveButton.className = "btn btn-sm";
+        leaveButton.textContent = "离开队伍";
+        leaveButton.onclick = leaveSecretRealmTeam;
+        teamPanel.appendChild(leaveButton);
+    } else {
+        const empty = document.createElement("p");
+        empty.className = "secret-realm-team-empty";
+        empty.textContent = "单人即可开启，也可以邀请道友共同攻击（最多4人）。";
+        teamPanel.appendChild(empty);
+        const controls = document.createElement("div");
+        controls.className = "secret-realm-team-controls";
+        const soloButton = document.createElement("button");
+        soloButton.className = "btn btn-sm btn-fight";
+        soloButton.textContent = "单人开启秘境";
+        soloButton.onclick = createSecretRealmTeam;
+        controls.appendChild(soloButton);
+        const codeInput = document.createElement("input");
+        codeInput.id = "secret-realm-team-code";
+        codeInput.className = "secret-realm-team-code";
+        codeInput.placeholder = "输入队伍码";
+        codeInput.maxLength = 6;
+        controls.appendChild(codeInput);
+        const joinButton = document.createElement("button");
+        joinButton.className = "btn btn-sm";
+        joinButton.textContent = "加入队伍";
+        joinButton.onclick = joinSecretRealmTeam;
+        controls.appendChild(joinButton);
+        teamPanel.appendChild(controls);
+    }
+    body.appendChild(teamPanel);
 
     const arena = document.createElement("section");
     arena.className = "secret-realm-arena";
@@ -216,22 +268,16 @@ function renderSecretRealm(data) {
 
     const info = document.createElement("div");
     info.className = "secret-realm-entry-info";
-    info.textContent = `本周入场次数：${entriesRemaining} / ${data.exploration_limit} · 个人战功：${data.contribution}`;
+    info.textContent = `本周剩余入场次数：${entriesRemaining} / 3 · 个人战功：${data.contribution} · 战斗中出击不限次数`;
     arena.appendChild(info);
 
     const actions = document.createElement("div");
     actions.className = "secret-realm-actions";
-    const exploreButton = document.createElement("button");
-    exploreButton.className = "btn btn-sm";
-    exploreButton.textContent = "探索秘境（消耗1次）";
-    exploreButton.disabled = entriesRemaining <= 0;
-    exploreButton.onclick = exploreSecretRealm;
-    actions.appendChild(exploreButton);
     const challengeButton = document.createElement("button");
     challengeButton.id = "secret-realm-challenge-button";
     challengeButton.className = "btn btn-sm btn-fight";
-    challengeButton.textContent = isDefeated ? "本周首领已伏诛" : "出击（消耗1次）";
-    challengeButton.disabled = entriesRemaining <= 0 || isDefeated || player.hp <= 0 || secretRealmChallengePending;
+    challengeButton.textContent = isDefeated ? "本周首领已伏诛" : "出击（本次不扣次数）";
+    challengeButton.disabled = entriesRemaining <= 0 || isDefeated || player.hp <= 0 || secretRealmChallengePending || !data.team;
     challengeButton.onclick = challengeSecretRealm;
     actions.appendChild(challengeButton);
     arena.appendChild(actions);

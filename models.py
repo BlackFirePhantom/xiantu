@@ -295,7 +295,7 @@ def apply_secret_realm_boss_damage(user_id, week_id, requested_damage, max_hp=50
 def resolve_secret_realm_boss_encounter(
     user_id, week_id, *, player_damage, player_defense, boss_attack, max_hp, entry_limit
 ):
-    """Atomically resolve one paid realm-boss encounter and its counterattack."""
+    """Atomically resolve one realm-boss strike and its counterattack."""
     with get_db() as conn:
         conn.execute("BEGIN IMMEDIATE")
         conn.execute(
@@ -337,11 +337,12 @@ def resolve_secret_realm_boss_encounter(
             inventory["chiyan_jing"] = inventory.get("chiyan_jing", 0) + 1
 
         conn.execute("UPDATE secret_realm_bosses SET hp = ? WHERE week_id = ?", (remaining_hp, week_id))
+        entry_consumed = player_died or defeated
         conn.execute(
             """UPDATE secret_realm_runs
-               SET explorations = explorations + 1, contribution = contribution + ?, boss_damage = boss_damage + ?
-               WHERE week_id = ? AND user_id = ?""",
-            (damage, damage, week_id, user_id),
+               SET explorations = explorations + ?, contribution = contribution + ?, boss_damage = boss_damage + ?
+             WHERE week_id = ? AND user_id = ?""",
+            (int(entry_consumed), damage, damage, week_id, user_id),
         )
         conn.execute(
             """UPDATE characters
@@ -366,7 +367,8 @@ def resolve_secret_realm_boss_encounter(
         "player_damage": counter_damage,
         "player_hp": restored_hp,
         "player_died": player_died,
-        "entries_remaining": entry_limit - run["explorations"] - 1,
+        "entry_consumed": entry_consumed,
+        "entries_remaining": entry_limit - run["explorations"] - int(entry_consumed),
     }
 
 

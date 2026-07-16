@@ -9,6 +9,7 @@ from game.secret_realm import (
 )
 import models
 import game_state
+from game.secret_realm_team import reset_teams
 
 
 def test_exploration_grants_progress_gold_and_contribution():
@@ -67,7 +68,7 @@ def test_weekly_boss_rotation_is_stable_and_exposes_multiple_bosses():
     assert {"name", "description", "max_hp", "attack"} <= first_week.keys()
 
 
-def test_boss_encounter_consumes_an_entry_and_returns_counterattack_damage(tmp_path, monkeypatch):
+def test_boss_encounter_keeps_entry_until_death_or_kill(tmp_path, monkeypatch):
     monkeypatch.setattr(models, "DB_PATH", str(tmp_path / "realm_encounter.db"))
     models.init_db()
     with models.get_db() as conn:
@@ -85,9 +86,23 @@ def test_boss_encounter_consumes_an_entry_and_returns_counterattack_damage(tmp_p
     assert result["boss_hp"] == 60
     assert result["player_damage"] == 20
     assert result["player_hp"] == 80
-    assert result["entries_remaining"] == 2
-    assert models.get_secret_realm_run(1, "2026-W29")["explorations"] == 1
+    assert result["entry_consumed"] is False
+    assert result["entries_remaining"] == EXPLORATION_LIMIT
+    assert models.get_secret_realm_run(1, "2026-W29")["explorations"] == 0
     assert models.get_character(1)["hp"] == 80
+
+    follow_up = models.resolve_secret_realm_boss_encounter(
+        1, "2026-W29", player_damage=40, player_defense=5, boss_attack=25, max_hp=100, entry_limit=3
+    )
+    assert follow_up["entry_consumed"] is False
+    assert follow_up["entries_remaining"] == EXPLORATION_LIMIT
+
+    finishing = models.resolve_secret_realm_boss_encounter(
+        1, "2026-W29", player_damage=40, player_defense=5, boss_attack=25, max_hp=100, entry_limit=3
+    )
+    assert finishing["defeated"] is True
+    assert finishing["entry_consumed"] is True
+    assert finishing["entries_remaining"] == EXPLORATION_LIMIT - 1
 
 
 def test_boss_death_returns_to_safety_and_exhausted_entries_block_entry(tmp_path, monkeypatch):
@@ -147,10 +162,12 @@ def test_secret_realm_socket_state_shows_player_hp_and_consumes_entry(tmp_path, 
         assert initial["boss"]["name"] == get_weekly_boss("2026-W29")["name"]
         assert initial["player"] == {"hp": 100, "max_hp": 100}
         assert initial["entries_remaining"] == EXPLORATION_LIMIT
-        assert updated["entries_remaining"] == EXPLORATION_LIMIT - 1
+        assert updated["entries_remaining"] == EXPLORATION_LIMIT
         assert updated["player"]["hp"] < initial["player"]["hp"]
+        assert updated["team"]["members"] == [{"id": 1, "name": "tester"}]
         client.disconnect()
     finally:
+        reset_teams()
         with game_state.cache_lock:
             game_state.character_cache.clear()
             game_state.dirty_users.clear()

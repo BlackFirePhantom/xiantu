@@ -1,23 +1,23 @@
 """Socket.IO handlers for the weekly secret realm."""
 
 from datetime import date
-import random
 
 from flask import session
-from flask_socketio import emit
+from flask_socketio import emit, join_room, leave_room
 
 import game_state
-from game.secret_realm import EXPLORATION_LIMIT, explore, get_season_modifier, get_weekly_boss
+from game.secret_realm import EXPLORATION_LIMIT, get_season_modifier, get_weekly_boss
+from game.secret_realm_team import create_team, get_team_for_user, join_team, leave_team
 from game.utils import get_full_stats
 from models import (
     claim_secret_realm_settlement,
+    get_character,
     get_character_titles,
     get_pending_secret_realm_settlements,
     get_secret_realm_boss,
     get_secret_realm_leaderboard,
     get_secret_realm_run,
     resolve_secret_realm_boss_encounter,
-    save_secret_realm_run,
 )
 from .base import do_get_state
 
@@ -25,6 +25,23 @@ from .base import do_get_state
 def _week_id(today=None):
     iso_week = (today or date.today()).isocalendar()
     return f"{iso_week.year}-W{iso_week.week:02d}"
+
+
+def _team_state(user_id):
+    team = get_team_for_user(user_id)
+    if not team:
+        return None
+    members = []
+    for member_id in team["members"]:
+        char = game_state.get_cached_character(member_id) or get_character(member_id)
+        members.append({"id": member_id, "name": char["name"] if char else f"玩家{member_id}"})
+    return {
+        "id": team["id"],
+        "leader_id": team["leader_id"],
+        "is_leader": team["leader_id"] == user_id,
+        "members": members,
+        "max_members": 4,
+    }
 
 
 def _state_for(user_id):
@@ -38,8 +55,6 @@ def _state_for(user_id):
     return {
         "week_id": week_id,
         "name": "轮回秘境",
-        "explorations": run["explorations"],
-        "exploration_limit": EXPLORATION_LIMIT,
         "entries_remaining": max(0, EXPLORATION_LIMIT - run["explorations"]),
         "contribution": run["contribution"],
         "boss_damage": run["boss_damage"],
@@ -49,6 +64,7 @@ def _state_for(user_id):
         "pending_settlements": get_pending_secret_realm_settlements(user_id, week_id),
         "season": get_season_modifier(week_id),
         "titles": get_character_titles(user_id),
+        "team": _team_state(user_id),
     }
 
 
@@ -62,42 +78,53 @@ def register_secret_realm_handlers(socketio):
         if "user_id" in session:
             _emit_state(session["user_id"])
 
-    @socketio.on("secret_realm_explore")
-    def handle_secret_realm_explore():
+    @socketio.on("secret_realm_team_create")
+    def handle_secret_realm_team_create():
         if "user_id" not in session:
             return
         user_id = session["user_id"]
-        char = game_state.get_cached_character(user_id)
-        if not char:
-            return
-        game_state.touch_activity(session.get("username", ""))
+        old_team = get_team_for_user(user_id)
+        if old_team:
+            leave_room(old_team["id"])
+        team = create_team(user_id)
+        join_room(team["id"])
+        emit("game_msg", {"text": f"已创建秘境队伍，队伍码：{team['id']}。单人即可开启秘境。", "type": "system"})
+        _emit_state(user_id)
+        socketio.emit("secret_realm_team_changed", {"team_id": team["id"]}, room=team["id"])
 
-        week_id = _week_id()
-        season = get_season_modifier(week_id)
-        result = explore(
-            get_secret_realm_run(user_id, week_id),
-            random.randint(0, 7),
-            gold_bonus=season["gold_bonus"],
-            contribution_bonus=season["contribution_bonus"],
-        )
-        if not result["ok"]:
-            emit("game_msg", {"text": "本周秘境入场次数已耗尽。", "type": "error"})
+    @socketio.on("secret_realm_team_join")
+    def handle_secret_realm_team_join(data):
+        if "user_id" not in session or not isinstance(data, dict):
+            return
+        user_id = session["user_id"]
+        old_team = get_team_for_user(user_id)
+        result = join_team(user_id, data.get("team_id"))
+        if isinstance(result, dict) and result.get("ok") is False:
+            text = "队伍不存在。" if result["reason"] == "team_not_found" else "队伍已满（最多4人）。"
+            emit("game_msg", {"text": text, "type": "error"})
+            return
+        if old_team and old_team["id"] != result["id"]:
+            leave_room(old_team["id"])
+            socketio.emit("secret_realm_team_changed", {"team_id": old_team["id"]}, room=old_team["id"])
+        join_room(result["id"])
+        emit("game_msg", {"text": f"已加入秘境队伍 {result['id']}。", "type": "system"})
+        _emit_state(user_id)
+        socketio.emit("secret_realm_team_changed", {"team_id": result["id"]}, room=result["id"])
+
+    @socketio.on("secret_realm_team_leave")
+    def handle_secret_realm_team_leave():
+        if "user_id" not in session:
+            return
+        user_id = session["user_id"]
+        old_team = get_team_for_user(user_id)
+        if not old_team:
             _emit_state(user_id)
             return
-
-        run = result["run"]
-        save_secret_realm_run(user_id, week_id, **run)
-        game_state.modify_cached_character(
-            user_id,
-            gold=result["gold_gain"],
-            sect_contrib=result["contribution_gain"],
-        )
-        emit("game_msg", {
-            "text": f"秘境探索成功，获得 {result['gold_gain']} 灵石与 {result['contribution_gain']} 秘境贡献。",
-            "type": "shop",
-        })
+        leave_room(old_team["id"])
+        leave_team(user_id)
+        emit("game_msg", {"text": "你已离开秘境队伍。", "type": "system"})
         _emit_state(user_id)
-        do_get_state(user_id)
+        socketio.emit("secret_realm_team_changed", {"team_id": old_team["id"]}, room=old_team["id"])
 
     @socketio.on("claim_secret_realm_settlement")
     def handle_claim_secret_realm_settlement(data):
@@ -130,6 +157,12 @@ def register_secret_realm_handlers(socketio):
         if not char:
             return
         game_state.touch_activity(session.get("username", ""))
+
+        team = get_team_for_user(user_id)
+        if not team:
+            team = create_team(user_id)
+            join_room(team["id"])
+            socketio.emit("secret_realm_team_changed", {"team_id": team["id"]}, room=team["id"])
 
         week_id = _week_id()
         boss_config = get_weekly_boss(week_id)

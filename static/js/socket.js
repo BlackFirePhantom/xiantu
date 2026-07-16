@@ -36,6 +36,7 @@ socket.on("secret_realm_state", (data) => {
     secretRealmChallengePending = false;
     renderSecretRealm(data);
 });
+socket.on("secret_realm_team_changed", () => socket.emit("get_secret_realm"));
 socket.on("sect_boss_state", (data) => renderSectBoss(data));
 socket.on("techniques_list", (data) => renderTechniques(data));
 socket.on("meridians_list", (data) => renderMeridians(data));
