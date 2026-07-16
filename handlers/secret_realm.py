@@ -7,7 +7,7 @@ from flask import session
 from flask_socketio import emit
 
 import game_state
-from game.secret_realm import BOSS_MAX_HP, EXPLORATION_LIMIT, explore
+from game.secret_realm import BOSS_MAX_HP, EXPLORATION_LIMIT, explore, get_season_modifier
 from game.utils import get_full_stats
 from models import (
     apply_secret_realm_boss_damage,
@@ -16,6 +16,7 @@ from models import (
     get_secret_realm_run,
     get_pending_secret_realm_settlements,
     claim_secret_realm_settlement,
+    get_character_titles,
     save_secret_realm_run,
 )
 from .base import do_get_state
@@ -30,6 +31,7 @@ def _state_for(user_id):
     week_id = _week_id()
     run = get_secret_realm_run(user_id, week_id)
     boss = get_secret_realm_boss(week_id, max_hp=BOSS_MAX_HP)
+    season = get_season_modifier(week_id)
     return {
         "week_id": week_id,
         "name": "赤焰秘境",
@@ -40,6 +42,8 @@ def _state_for(user_id):
         "boss": boss,
         "leaderboard": get_secret_realm_leaderboard(week_id),
         "pending_settlements": get_pending_secret_realm_settlements(user_id, week_id),
+        "season": season,
+        "titles": get_character_titles(user_id),
     }
 
 
@@ -64,7 +68,13 @@ def register_secret_realm_handlers(socketio):
         game_state.touch_activity(session.get("username", ""))
 
         week_id = _week_id()
-        result = explore(get_secret_realm_run(user_id, week_id), random.randint(0, 7))
+        season = get_season_modifier(week_id)
+        result = explore(
+            get_secret_realm_run(user_id, week_id),
+            random.randint(0, 7),
+            gold_bonus=season["gold_bonus"],
+            contribution_bonus=season["contribution_bonus"],
+        )
         if not result["ok"]:
             emit("game_msg", {"text": "本周秘境探索次数已耗尽。", "type": "error"})
             return
@@ -114,7 +124,8 @@ def register_secret_realm_handlers(socketio):
         game_state.touch_activity(session.get("username", ""))
 
         week_id = _week_id()
-        damage = max(1, get_full_stats(char)["atk"] * 3)
+        season = get_season_modifier(week_id)
+        damage = max(1, round(get_full_stats(char)["atk"] * 3 * season["boss_damage_multiplier"]))
         run = get_secret_realm_run(user_id, week_id)
         if run["explorations"] < EXPLORATION_LIMIT:
             emit("game_msg", {"text": "完成三次秘境探索后，才能挑战首领。", "type": "error"})
