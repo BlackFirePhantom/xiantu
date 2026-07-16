@@ -841,6 +841,59 @@ a:focus-visible {
     margin: 16px 0 10px; 
     letter-spacing: 2px; 
 }
+
+/* ===== 宗门首领 ===== */
+.sect-boss-modal-content {
+    width: min(560px, calc(100vw - 32px));
+    max-height: min(760px, calc(100vh - 48px));
+    overflow-y: auto;
+}
+.sect-boss-arena {
+    position: relative;
+    overflow: hidden;
+    border: 1px solid rgba(211, 78, 78, 0.42);
+    border-radius: 12px;
+    padding: 20px;
+    background: linear-gradient(145deg, rgba(92, 32, 32, 0.5), rgba(18, 20, 28, 0.96));
+}
+.sect-boss-arena::before {
+    content: "";
+    position: absolute;
+    inset: -70px auto auto -60px;
+    width: 180px;
+    height: 180px;
+    border-radius: 50%;
+    background: rgba(211, 78, 78, 0.12);
+    filter: blur(10px);
+    pointer-events: none;
+}
+.sect-boss-hero { display: flex; align-items: center; gap: 14px; position: relative; }
+.sect-boss-emblem {
+    width: 52px; height: 52px; display: grid; place-items: center; flex: 0 0 52px;
+    border: 1px solid rgba(255, 157, 107, 0.7); border-radius: 50%;
+    background: #351817; color: #ffd1b0; font-family: var(--font-serif); font-size: 27px;
+    box-shadow: inset 0 0 18px rgba(211, 78, 78, 0.3), 0 0 20px rgba(211, 78, 78, 0.18);
+}
+.sect-boss-eyebrow { margin: 0 0 4px; color: #c99d77; font-size: 11px; letter-spacing: 0.08em; }
+.sect-boss-name { margin: 0; color: #ffe0c7; font-size: 22px; letter-spacing: 0.06em; }
+.sect-boss-subtitle { margin: 4px 0 0; color: var(--text-secondary); font-size: 12px; }
+.sect-boss-health { position: relative; margin-top: 20px; }
+.sect-boss-health-labels { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 8px; color: #d6c5bc; font-size: 12px; }
+.sect-boss-health-labels strong { color: #ffdfc8; font-family: var(--font-mono); }
+.sect-boss-health-track { height: 12px; overflow: hidden; border: 1px solid rgba(255, 174, 130, 0.35); border-radius: 999px; background: #170f13; }
+.sect-boss-health-fill { height: 100%; min-width: 0; border-radius: inherit; background: linear-gradient(90deg, #c33e3e, #ee8055); box-shadow: 0 0 14px rgba(238, 128, 85, 0.48); transition: width 280ms ease; }
+.sect-boss-status { margin-top: 7px; color: #d99d80; font-size: 11px; text-align: right; }
+.sect-boss-reward { position: relative; display: inline-flex; margin-top: 16px; padding: 5px 9px; border: 1px solid rgba(230, 193, 92, 0.45); border-radius: 5px; color: #f0cf7a; background: rgba(98, 75, 23, 0.2); font-size: 11px; }
+.sect-boss-challenge { position: relative; width: 100%; margin-top: 14px; min-height: 42px; border-color: #e26d55; color: #ffe5d6; background: linear-gradient(135deg, #7a2d29, #4b1c20); font-family: var(--font-serif); font-size: 15px; letter-spacing: 0.08em; }
+.sect-boss-challenge:hover:not(:disabled) { box-shadow: 0 0 20px rgba(211, 78, 78, 0.32); transform: translateY(-1px); }
+.sect-boss-challenge:disabled { cursor: not-allowed; opacity: 0.58; }
+.sect-boss-leaderboard { margin-top: 18px; }
+.sect-boss-leaderboard h4 { margin-bottom: 10px; }
+.sect-boss-rank-row { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; align-items: center; gap: 10px; min-height: 40px; padding: 0 10px; border-bottom: 1px solid rgba(63, 167, 117, 0.12); }
+.sect-boss-rank { color: #c99d77; font-family: var(--font-serif); text-align: center; }
+.sect-boss-player { overflow: hidden; color: var(--text-primary); text-overflow: ellipsis; white-space: nowrap; }
+.sect-boss-damage { color: #e9b56d; font-size: 12px; font-weight: 500; }
+.sect-boss-empty { margin: 0; padding: 16px; border: 1px dashed rgba(201, 157, 119, 0.35); color: var(--text-secondary); font-size: 12px; text-align: center; }
 .divider { 
     border: none; 
     border-top: 1px solid rgba(63, 167, 117, 0.1); 

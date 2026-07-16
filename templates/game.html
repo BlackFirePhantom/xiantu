@@ -191,10 +191,10 @@
     </div>
 
     <div id="sect-boss-modal" class="modal" role="dialog" aria-modal="true" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
-        <div class="modal-content">
+        <div class="modal-content sect-boss-modal-content">
             <span class="modal-close" onclick="this.closest('.modal').style.display='none'">&times;</span>
             <h3>宗门首领</h3>
-            <div id="sect-boss-body"></div>
+            <div id="sect-boss-body" aria-live="polite"></div>
         </div>
     </div>
 

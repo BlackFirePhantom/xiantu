@@ -219,39 +219,101 @@ function renderSecretRealm(data) {
 function renderSectBoss(data) {
     const body = document.getElementById("sect-boss-body");
     body.replaceChildren();
+    const boss = data.boss;
+    const hpPct = boss.max_hp ? Math.max(0, Math.round(boss.hp / boss.max_hp * 100)) : 0;
+    const isDefeated = boss.hp <= 0;
 
-    const summary = document.createElement("p");
-    summary.textContent = `本周 ${data.week_id}｜${data.name}：${data.boss.hp} / ${data.boss.max_hp} 气血`;
-    body.appendChild(summary);
+    const arena = document.createElement("section");
+    arena.className = "sect-boss-arena";
 
-    const hint = document.createElement("p");
-    hint.className = "forge-hint";
-    hint.textContent = "全服同门共同镇压。最后一击可获得限量材料【宗门令牌】。";
-    body.appendChild(hint);
+    const hero = document.createElement("div");
+    hero.className = "sect-boss-hero";
+    const emblem = document.createElement("div");
+    emblem.className = "sect-boss-emblem";
+    emblem.textContent = "蛟";
+    hero.appendChild(emblem);
+    const heading = document.createElement("div");
+    const eyebrow = document.createElement("p");
+    eyebrow.className = "sect-boss-eyebrow";
+    eyebrow.textContent = `${data.week_id} · 全服护宗战`;
+    const name = document.createElement("h4");
+    name.className = "sect-boss-name";
+    name.textContent = data.name;
+    const subtitle = document.createElement("p");
+    subtitle.className = "sect-boss-subtitle";
+    subtitle.textContent = isDefeated ? "本周魔蛟已伏诛，同门威名远扬。" : "集结同门，以剑镇压来犯魔蛟。";
+    heading.append(eyebrow, name, subtitle);
+    hero.appendChild(heading);
+    arena.appendChild(hero);
+
+    const health = document.createElement("div");
+    health.className = "sect-boss-health";
+    const healthLabels = document.createElement("div");
+    healthLabels.className = "sect-boss-health-labels";
+    const healthLabel = document.createElement("span");
+    healthLabel.textContent = "护宗魔蛟气血";
+    const healthValue = document.createElement("strong");
+    healthValue.textContent = `${boss.hp} / ${boss.max_hp}`;
+    healthLabels.append(healthLabel, healthValue);
+    const track = document.createElement("div");
+    track.className = "sect-boss-health-track";
+    track.setAttribute("role", "progressbar");
+    track.setAttribute("aria-label", "护宗魔蛟剩余气血");
+    track.setAttribute("aria-valuemin", "0");
+    track.setAttribute("aria-valuemax", String(boss.max_hp));
+    track.setAttribute("aria-valuenow", String(boss.hp));
+    const fill = document.createElement("div");
+    fill.className = "sect-boss-health-fill";
+    fill.style.width = `${hpPct}%`;
+    track.appendChild(fill);
+    const status = document.createElement("div");
+    status.className = "sect-boss-status";
+    status.textContent = isDefeated ? "已镇压" : `尚余 ${hpPct}% 气血`;
+    health.append(healthLabels, track, status);
+    arena.appendChild(health);
+
+    const rewards = document.createElement("div");
+    rewards.className = "sect-boss-reward";
+    rewards.textContent = "终结奖励 · 宗门令牌 ×1";
+    arena.appendChild(rewards);
 
     const challenge = document.createElement("button");
-    challenge.className = "btn btn-sm btn-fight";
-    challenge.textContent = "挑战护宗魔蛟";
-    challenge.disabled = data.boss.hp <= 0;
+    challenge.className = "btn sect-boss-challenge";
+    challenge.textContent = isDefeated ? "本周已镇压" : "出战镇压魔蛟";
+    challenge.disabled = isDefeated;
     challenge.onclick = challengeSectBoss;
-    body.appendChild(challenge);
+    arena.appendChild(challenge);
+    body.appendChild(arena);
 
+    const leaderboard = document.createElement("section");
+    leaderboard.className = "sect-boss-leaderboard";
     const title = document.createElement("h4");
-    title.textContent = "本周护宗榜";
-    body.appendChild(title);
-    const list = document.createElement("ol");
-    (data.leaderboard || []).forEach(entry => {
-        const item = document.createElement("li");
-        item.textContent = `${entry.name}｜伤害 ${entry.damage}`;
-        list.appendChild(item);
-    });
-    if (list.childElementCount) {
-        body.appendChild(list);
+    title.textContent = "护宗战功榜";
+    leaderboard.appendChild(title);
+    const entries = data.leaderboard || [];
+    if (entries.length) {
+        entries.forEach((entry, index) => {
+            const row = document.createElement("div");
+            row.className = "sect-boss-rank-row";
+            const rank = document.createElement("span");
+            rank.className = "sect-boss-rank";
+            rank.textContent = index < 3 ? ["壹", "贰", "叁"][index] : String(index + 1);
+            const player = document.createElement("span");
+            player.className = "sect-boss-player";
+            player.textContent = entry.name;
+            const damage = document.createElement("strong");
+            damage.className = "sect-boss-damage";
+            damage.textContent = `${entry.damage} 战功`;
+            row.append(rank, player, damage);
+            leaderboard.appendChild(row);
+        });
     } else {
         const empty = document.createElement("p");
-        empty.textContent = "尚无同门出战。";
-        body.appendChild(empty);
+        empty.className = "sect-boss-empty";
+        empty.textContent = "尚无同门出战。你将成为今日的第一位护宗者。";
+        leaderboard.appendChild(empty);
     }
+    body.appendChild(leaderboard);
 }
 
 function renderInventory(items) {
