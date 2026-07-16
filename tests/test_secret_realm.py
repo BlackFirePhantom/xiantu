@@ -306,8 +306,7 @@ def test_refresh_cached_character_reflects_atomic_settlement_changes(tmp_path, m
         conn.execute("INSERT INTO users (id, username, password_hash) VALUES (1, 'tester', 'unused')")
         conn.execute("INSERT INTO characters (user_id, name) VALUES (1, 'tester')")
     models.save_secret_realm_run(1, "2026-W28", explorations=3, contribution=80, boss_damage=70)
-
-    with game_state.cache_lock:
+    with game_state.cache_lock:
         game_state.character_cache.clear()
         game_state.dirty_users.clear()
     try:
@@ -320,6 +319,66 @@ def test_refresh_cached_character_reflects_atomic_settlement_changes(tmp_path, m
         assert game_state.get_cached_character(1)["gold"] == 120
         assert 1 not in game_state.dirty_users
     finally:
+        with game_state.cache_lock:
+            game_state.character_cache.clear()
+            game_state.dirty_users.clear()
+
+
+def test_team_coop_combat_buffs_and_resonance(tmp_path, monkeypatch):
+    monkeypatch.setattr(models, "DB_PATH", str(tmp_path / "realm_team.db"))
+    models.init_db()
+    with models.get_db() as conn:
+        conn.execute("INSERT INTO users (id, username, password_hash) VALUES (1, 'p1', 'unused')")
+        conn.execute("INSERT INTO users (id, username, password_hash) VALUES (2, 'p2', 'unused')")
+        conn.execute("INSERT INTO users (id, username, password_hash) VALUES (3, 'p3', 'unused')")
+        conn.execute("INSERT INTO users (id, username, password_hash) VALUES (4, 'p4', 'unused')")
+        conn.execute("INSERT INTO characters (user_id, name, hp, max_hp, spirit_root, location) VALUES (1, 'p1', 100, 100, 'jin', 'chiyan_forest')")
+        conn.execute("INSERT INTO characters (user_id, name, hp, max_hp, spirit_root, location) VALUES (2, 'p2', 100, 100, 'mu', 'chiyan_forest')")
+        conn.execute("INSERT INTO characters (user_id, name, hp, max_hp, spirit_root, location) VALUES (3, 'p3', 100, 100, 'shui', 'chiyan_forest')")
+        conn.execute("INSERT INTO characters (user_id, name, hp, max_hp, spirit_root, location) VALUES (4, 'p4', 100, 100, 'huo', 'chiyan_forest')")
+
+    with game_state.cache_lock:
+        game_state.character_cache.clear()
+        game_state.dirty_users.clear()
+
+    import handlers.secret_realm as realm_handlers
+    monkeypatch.setattr(realm_handlers, "_week_id", lambda: "2026-W29")
+    from app import app, socketio
+    from game.secret_realm_team import create_team, join_team, reset_teams
+
+    try:
+        team = create_team(1)
+        join_team(2, team["id"])
+        join_team(3, team["id"])
+        join_team(4, team["id"])
+
+        flask_client = app.test_client()
+        with flask_client.session_transaction() as session:
+            session["user_id"] = 1
+            session["username"] = "p1"
+
+        client = socketio.test_client(app, flask_test_client=flask_client)
+        client.emit("get_secret_realm")
+        initial = [event["args"][0] for event in client.get_received() if event["name"] == "secret_realm_state"][0]
+
+        assert initial["team"]["id"] == team["id"]
+        assert len(initial["team"]["members"]) == 4
+
+        client.emit("secret_realm_challenge", {"action": "attack"})
+        received = client.get_received()
+
+        messages = [event["args"][0] for event in received if event["name"] == "game_msg"]
+
+        fight_msg = [m for m in messages if m["type"] == "fight"]
+        assert len(fight_msg) > 0
+        text = fight_msg[0]["text"]
+
+        assert "队伍共 4 人" in text
+        assert "四象乾坤" in text
+
+        client.disconnect()
+    finally:
+        reset_teams()
         with game_state.cache_lock:
             game_state.character_cache.clear()
             game_state.dirty_users.clear()

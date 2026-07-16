@@ -173,6 +173,8 @@ def register_secret_realm_handlers(socketio):
             socketio.emit("secret_realm_team_changed", {"team_id": team["id"]}, room=team["id"])
 
         action = data.get("action", "attack") if isinstance(data, dict) else "attack"
+        if not isinstance(action, str):
+            action = "attack"
         skill_id = data.get("skill_id") if isinstance(data, dict) else None
         if action not in {"attack", "skill", "defend"}:
             emit("game_msg", {"text": "无效的秘境行动。", "type": "error"})
@@ -196,6 +198,64 @@ def register_secret_realm_handlers(socketio):
             _emit_state(user_id)
             return
 
+        team_size = 1
+        distinct_elements = set()
+        huntian_count = 0
+        atk_mult = 1.0
+        def_mult = 1.0
+        resonance_dmg_mult = 1.0
+        negate_counter_chance = 0.0
+        resonance_name = ""
+        prefix_log = []
+
+        if team:
+            team_members = team.get("members", [])
+            team_size = len(team_members)
+            from game_data import SPIRIT_ROOTS
+            for member_id in team_members:
+                member_char = game_state.get_cached_character(member_id) or get_character(member_id)
+                if member_char:
+                    sr = member_char.get("spirit_root")
+                    element = SPIRIT_ROOTS.get(sr, {}).get("element") if sr else None
+                    if element:
+                        distinct_elements.add(element)
+                    elif sr == "huntian":
+                        huntian_count += 1
+
+            # 1. Team Size Buff
+            if team_size == 2:
+                atk_mult = 1.05
+                def_mult = 1.10
+            elif team_size == 3:
+                atk_mult = 1.10
+                def_mult = 1.15
+            elif team_size >= 4:
+                atk_mult = 1.15
+                def_mult = 1.20
+
+            # 2. Five Elements Resonance
+            num_elements = len(distinct_elements) + huntian_count * 2
+            num_elements = min(5, num_elements)
+
+            if num_elements == 3:
+                resonance_name = "三才聚灵"
+                resonance_dmg_mult = 1.15
+            elif num_elements == 4:
+                resonance_name = "四象乾坤"
+                resonance_dmg_mult = 1.25
+            elif num_elements >= 5:
+                resonance_name = "五行大阵"
+                resonance_dmg_mult = 1.35
+                negate_counter_chance = 0.20
+
+            if team_size > 1:
+                prefix_log.append(f"【队伍协作】队伍共 {team_size} 人，攻击提升 {int((atk_mult-1)*100)}%，防御提升 {int((def_mult-1)*100)}%。")
+            if resonance_name:
+                desc = f"【五行共鸣】触发【{resonance_name}】，伤害额外提升 {int((resonance_dmg_mult-1)*100)}%！"
+                if negate_counter_chance > 0:
+                    desc += f"（有 {int(negate_counter_chance*100)}% 概率免受反击）"
+                prefix_log.append(desc)
+
         boss = get_secret_realm_boss(week_id, max_hp=boss_config["max_hp"])
         combat = {
             "monster": {"name": boss_config["name"], "level": 1},
@@ -207,8 +267,8 @@ def register_secret_realm_handlers(socketio):
             "player_max_hp": stats["max_hp"],
             "player_mp": current_mp,
             "player_max_mp": stats.get("max_mp", current_mp),
-            "player_atk": stats["atk"],
-            "player_def": stats["def"],
+            "player_atk": int(stats["atk"] * atk_mult),
+            "player_def": int(stats["def"] * def_mult),
             "round": 1,
             "char_level": char.get("level", 1),
             "defending": False,
@@ -218,12 +278,23 @@ def register_secret_realm_handlers(socketio):
             "monster_debuffs": {},
         }
         action_log = _process_player_action(combat, action, skill_id, char, user_id)
+        if prefix_log:
+            action_log = prefix_log + action_log
+
         damage = max(0, int(boss["hp"] - max(0, combat["monster_hp"])))
-        damage = round(damage * season["boss_damage_multiplier"])
+        damage = round(damage * season["boss_damage_multiplier"] * resonance_dmg_mult)
         player_defense = _effective_def(combat, is_player=True)
         boss_attack = _effective_atk(combat, is_player=False)
         if combat["defending"]:
             boss_attack = max(1, boss_attack // 2)
+
+        import random
+        negated = False
+        if negate_counter_chance > 0 and random.random() < negate_counter_chance:
+            boss_attack = 0
+            negated = True
+            action_log.append("【五行护体】阵法神光大盛！你完全免受了首领的反击伤害！")
+
         support_action = action == "defend" or (action == "skill" and selected_skill and selected_skill.get("type") in {"heal", "defense", "buff", "debuff"})
         minimum_damage = 0 if support_action else 1
         game_state.save_cached_character(user_id)
@@ -260,13 +331,31 @@ def register_secret_realm_handlers(socketio):
                 "text": f"{boss_config['name']}反击造成 {result['player_damage']} 点伤害。你已陨落并被传送回青云镇，入场次数已消耗。",
                 "type": "error",
             })
+            if team and team_size > 1:
+                socketio.emit("game_msg", {
+                    "text": f"【秘境战报】队友【{char['name']}】挑战{boss_config['name']}，不幸陨落并传送回青云镇！",
+                    "type": "error"
+                }, room=team["id"])
         elif result["reward_granted"]:
             emit("game_msg", {"text": f"{boss_config['name']}伏诛！你获得限定素材【赤焰晶】。", "type": "buff"})
+            if team and team_size > 1:
+                socketio.emit("game_msg", {
+                    "text": f"【秘境捷报】首领{boss_config['name']}已被【{char['name']}】成功击败！",
+                    "type": "buff"
+                }, room=team["id"])
         else:
             action_text = " ".join(action_log)
             emit("game_msg", {
                 "text": f"{action_text} 你对{boss_config['name']}造成 {result['damage']} 点伤害，承受反击 {result['player_damage']} 点伤害。",
                 "type": "fight",
             })
+            if team and team_size > 1:
+                socketio.emit("game_msg", {
+                    "text": f"【秘境共战】队友【{char['name']}】对{boss_config['name']}出手，造成了 {result['damage']} 点伤害，自身承受 {result['player_damage']} 点反击伤害！",
+                    "type": "fight"
+                }, room=team["id"])
+
+        if team and team_size > 1:
+            socketio.emit("secret_realm_team_changed", {"team_id": team["id"]}, room=team["id"])
         _emit_state(user_id)
         do_get_state(user_id)

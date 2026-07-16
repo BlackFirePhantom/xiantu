@@ -338,7 +338,7 @@ def resolve_secret_realm_boss_encounter(
         damage = min(max(int(minimum_damage), int(player_damage)), boss["hp"])
         remaining_hp = boss["hp"] - damage
         defeated = remaining_hp == 0
-        counter_damage = 0 if defeated else max(1, int(boss_attack) - int(player_defense))
+        counter_damage = 0 if (defeated or boss_attack <= 0) else max(1, int(boss_attack) - int(player_defense))
         action_hp = char["hp"] if player_hp is None else min(char["max_hp"], max(0, int(player_hp)))
         player_hp = max(0, action_hp - counter_damage)
         player_died = player_hp == 0

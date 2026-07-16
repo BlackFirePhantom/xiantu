@@ -405,7 +405,7 @@ function renderSecretRealm(data) {
     action.className = "btn secret-realm-challenge";
     action.textContent = isDefeated ? "本周首领已伏诛" : "出击 · 继续鏖战";
     action.disabled = actionDisabled;
-    action.onclick = challengeSecretRealm;
+    action.onclick = () => challengeSecretRealm("attack");
     shell.appendChild(action);
     body.appendChild(shell);
 
