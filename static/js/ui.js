@@ -382,7 +382,9 @@ function renderSecretRealm(data) {
     manaPanel.appendChild(createSecretRealmManaBar(player));
     shell.appendChild(manaPanel);
 
-    const actionDisabled = entriesRemaining <= 0 || isDefeated || player.hp <= 0 || secretRealmChallengePending || !data.team;
+    // 秘境支持单人直接开战；服务端会在首次出击时自动创建队伍。
+    // 因此没有队伍时不能禁用行动按钮，否则“单人即可开战”的后端能力永远触发不了。
+    const actionDisabled = entriesRemaining <= 0 || isDefeated || player.hp <= 0 || secretRealmChallengePending;
     shell.appendChild(createSecretRealmSkillPanel(data, player, actionDisabled));
 
     const defend = document.createElement("button");
