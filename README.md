@@ -54,19 +54,24 @@
 ```bash
 git clone https://github.com/BlackFirePhantom/xiantu.git
 cd xiantu
-docker-compose up -d --build
+docker compose up -d --build
 ```
 访问 `http://你的服务器IP:8500`
 
 **更新部署**：
 ```bash
-# 拉取最新代码
+# 1. 拉取最新代码
 git pull origin main
 
-# 重新构建镜像并重启容器
-docker-compose up -d --build
+# 2. 强制删除旧容器（防止旧版 V1 残留导致命名冲突）
+docker rm -f xiantu
+
+# 3. 重新构建镜像并重启容器
+docker compose up -d --build
 ```
-> **提示**：如果遇到 `Permission denied` 权限问题，可运行 `sudo chown -R $USER:$USER .` 修复权限所有权。
+> **提示**：
+> * 如果遇到 `git pull` 报错 `Permission denied`，可先运行 `sudo chown -R $USER:$USER .` 修复项目目录的属主权限。
+> * 如果在部署时遇到 `KeyError: 'ContainerConfig'` 崩溃，说明是老版 `docker-compose` (V1) 的兼容性 Bug，请使用 `docker compose` (V2) 替代，或运行 `sudo apt-get install docker-compose-plugin` 升级。
 
 
 ### 方式二：直接运行
