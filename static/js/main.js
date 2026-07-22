@@ -7,13 +7,22 @@ function doMeditate() { socket.emit("meditate"); }
 function doBreakthrough() { socket.emit("breakthrough"); }
 let secretRealmChallengePending = false;
 let secretRealmChallengeTimer = null;
+let secretRealmActionId = null;
 
-function clearSecretRealmChallengePending() {
+function clearSecretRealmChallengePending({ preserveActionId = false } = {}) {
     secretRealmChallengePending = false;
+    if (!preserveActionId) secretRealmActionId = null;
     if (secretRealmChallengeTimer !== null) {
         clearTimeout(secretRealmChallengeTimer);
         secretRealmChallengeTimer = null;
     }
+}
+
+function newSecretRealmActionId() {
+    if (window.crypto && typeof window.crypto.randomUUID === "function") {
+        return window.crypto.randomUUID();
+    }
+    return `realm-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
 }
 
 function showSecretRealm() {
@@ -62,10 +71,32 @@ function challengeSecretRealm(action = "attack", skillId = null) {
     }
     const payload = { action };
     if (skillId) payload.skill_id = skillId;
-    socket.emit("secret_realm_challenge", payload);
+    const actionId = secretRealmActionId || newSecretRealmActionId();
+    secretRealmActionId = actionId;
+    payload.action_id = actionId;
+    socket.emit("secret_realm_challenge", payload, (result) => {
+        if (secretRealmActionId !== actionId || !result) return;
+        if (result.ok) {
+            clearSecretRealmChallengePending();
+            return;
+        }
+        const preserveActionId = result.reason === "action_pending"
+            || result.reason === "settlement_failed";
+        clearSecretRealmChallengePending({ preserveActionId });
+        const retryButton = document.getElementById("secret-realm-challenge-button");
+        if (retryButton) {
+            retryButton.disabled = false;
+            retryButton.textContent = "重试出击";
+        }
+        if (result.reason === "action_pending") {
+            addLog("上一道秘境行动仍在结算，请稍候。", "system");
+        } else if (result.reason !== "settlement_failed") {
+            socket.emit("get_secret_realm");
+        }
+    });
     secretRealmChallengeTimer = setTimeout(() => {
         if (!secretRealmChallengePending) return;
-        clearSecretRealmChallengePending();
+        clearSecretRealmChallengePending({ preserveActionId: true });
         const retryButton = document.getElementById("secret-realm-challenge-button");
         if (retryButton && !retryButton.disabled) return;
         if (retryButton) {

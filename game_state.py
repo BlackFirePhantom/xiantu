@@ -27,6 +27,12 @@ AUCTION_REFRESH_INTERVAL = 4 * 3600 * 1000  # 4小时(ms)
 # 战斗状态（回合制）
 active_combats = {}     # user_id -> combat_state dict
 combat_lock = threading.Lock()
+COMBAT_TIMEOUT = 300   # 战斗超时（秒），5 分钟无操作自动中断
+
+# 秘境行动按玩家串行化。SQLite 事务保证最终结算原子性；此锁避免同一玩家
+# 的两个 Socket 事件在计算技能、增益和法力值时读取到同一份旧回合状态。
+secret_realm_locks = {}
+secret_realm_locks_guard = threading.Lock()
 
 # SocketIO 实例引用（由 app.py 启动时注入）
 socketio = None
@@ -35,6 +41,16 @@ socketio = None
 character_cache = {}   # user_id -> character dict (可写)
 dirty_users = set()    # 存有脏数据的 user_id 集合
 cache_lock = threading.RLock()
+
+
+def get_secret_realm_lock(user_id):
+    """Return a stable per-player lock for secret realm actions."""
+    with secret_realm_locks_guard:
+        lock = secret_realm_locks.get(user_id)
+        if lock is None:
+            lock = threading.RLock()
+            secret_realm_locks[user_id] = lock
+        return lock
 
 def get_cached_character(user_id):
     """从内存缓存获取角色数据。若未命中，则从 SQLite 加载并转为 dict。"""
@@ -233,3 +249,47 @@ def _settle_afk_reward(username, idle_duration):
             "drops": [ITEMS[d]["name"] for d in reward["drops"] if d in ITEMS],
             "duration": format_duration(reward["elapsed"]),
         }, room=sid)
+
+
+def cleanup_stale_combats():
+    """扫描并清理超时的战斗状态。
+
+    遍历 ``active_combats``，将 ``last_action_at`` 距今超过 ``COMBAT_TIMEOUT``
+    的战斗弹出并持久化当前 HP（防止免费满血逃脱）。若玩家在线则发送
+    ``combat_end`` 通知前端关闭面板。
+    """
+    now = time.time()
+    stale = []
+    with combat_lock:
+        for uid, combat in list(active_combats.items()):
+            last = combat.get("last_action_at", 0)
+            if now - last > COMBAT_TIMEOUT:
+                stale.append((uid, combat))
+
+    for uid, combat in stale:
+        with combat_lock:
+            # 再次确认仍在 dict 中（防止与 do_fight_action 并发）
+            if active_combats.get(uid) is not combat:
+                continue
+            active_combats.pop(uid, None)
+
+        # 持久化当前战斗 HP（与逃跑路径一致）
+        update_cached_character(uid, hp=combat["player_hp"])
+        save_cached_character(uid)
+
+        # 若玩家在线，通知前端关闭战斗面板
+        username = combat.get("username", "")
+        sid = online_users.get(username) if username else None
+        if socketio and sid:
+            socketio.emit("combat_end", {
+                "won": False,
+                "fled": False,
+                "log": ["战斗因长时间未操作已中断。"],
+            }, room=sid)
+        logger.info("清理超时战斗：user_id=%s, username=%s", uid, username)
+
+
+def reset_combats():
+    """清空所有战斗状态（仅用于测试）。"""
+    with combat_lock:
+        active_combats.clear()

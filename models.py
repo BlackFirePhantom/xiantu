@@ -15,9 +15,10 @@ DB_PATH = os.path.join(DB_DIR, "game.db")
 
 @contextmanager
 def get_db():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=5)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=5000")
     conn.execute("PRAGMA foreign_keys=ON")
     try:
         yield conn
@@ -128,6 +129,48 @@ def init_db():
                 max_hp INTEGER NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS secret_realm_combat_states (
+                week_id TEXT NOT NULL,
+                user_id INTEGER NOT NULL,
+                state_json TEXT NOT NULL,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (week_id, user_id),
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS secret_realm_actions (
+                week_id TEXT NOT NULL,
+                user_id INTEGER NOT NULL,
+                action_id TEXT NOT NULL,
+                result_json TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (week_id, user_id, action_id),
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS secret_realm_teams (
+                id TEXT PRIMARY KEY,
+                leader_id INTEGER NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (leader_id) REFERENCES users(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS secret_realm_team_members (
+                team_id TEXT NOT NULL,
+                user_id INTEGER NOT NULL UNIQUE,
+                joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (team_id, user_id),
+                FOREIGN KEY (team_id) REFERENCES secret_realm_teams(id) ON DELETE CASCADE,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_secret_realm_team_members_team
+                ON secret_realm_team_members (team_id, joined_at);
+
+            CREATE INDEX IF NOT EXISTS idx_secret_realm_runs_leaderboard
+                ON secret_realm_runs (week_id, contribution DESC, boss_damage DESC);
+
             CREATE TABLE IF NOT EXISTS sect_bosses (
                 week_id TEXT PRIMARY KEY,
                 hp INTEGER NOT NULL,
@@ -165,6 +208,123 @@ def init_db():
                 conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {col_def}")
                 logger.info("数据库迁移 v%d：%s 表新增列 %s", ver, table, col)
             conn.execute("INSERT OR IGNORE INTO schema_version (version) VALUES (?)", (ver,))
+
+
+def _secret_realm_team_view(conn, team_id):
+    team = conn.execute(
+        "SELECT id, leader_id FROM secret_realm_teams WHERE id = ?",
+        (team_id,),
+    ).fetchone()
+    if not team:
+        return None
+    members = conn.execute(
+        """SELECT user_id FROM secret_realm_team_members
+           WHERE team_id = ? ORDER BY joined_at, rowid""",
+        (team_id,),
+    ).fetchall()
+    return {
+        "id": team["id"],
+        "leader_id": team["leader_id"],
+        "members": [row["user_id"] for row in members],
+    }
+
+
+def _remove_secret_realm_team_member(conn, user_id):
+    membership = conn.execute(
+        "SELECT team_id FROM secret_realm_team_members WHERE user_id = ?",
+        (user_id,),
+    ).fetchone()
+    if not membership:
+        return None
+    team_id = membership["team_id"]
+    team = conn.execute(
+        "SELECT leader_id FROM secret_realm_teams WHERE id = ?",
+        (team_id,),
+    ).fetchone()
+    conn.execute(
+        "DELETE FROM secret_realm_team_members WHERE team_id = ? AND user_id = ?",
+        (team_id, user_id),
+    )
+    next_member = conn.execute(
+        """SELECT user_id FROM secret_realm_team_members
+           WHERE team_id = ? ORDER BY joined_at, rowid LIMIT 1""",
+        (team_id,),
+    ).fetchone()
+    if not next_member:
+        conn.execute("DELETE FROM secret_realm_teams WHERE id = ?", (team_id,))
+    elif team and team["leader_id"] == user_id:
+        conn.execute(
+            "UPDATE secret_realm_teams SET leader_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (next_member["user_id"], team_id),
+        )
+    return team_id
+
+
+def create_secret_realm_team(team_id, user_id):
+    """Create a persisted team and atomically move the leader from any old team."""
+    with get_db() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        created = conn.execute(
+            "INSERT OR IGNORE INTO secret_realm_teams (id, leader_id) VALUES (?, ?)",
+            (team_id, user_id),
+        )
+        if created.rowcount != 1:
+            return None
+        _remove_secret_realm_team_member(conn, user_id)
+        conn.execute(
+            "INSERT INTO secret_realm_team_members (team_id, user_id) VALUES (?, ?)",
+            (team_id, user_id),
+        )
+        return _secret_realm_team_view(conn, team_id)
+
+
+def join_secret_realm_team(team_id, user_id, max_members=4):
+    """Join a persisted team without losing the old team when the target is full."""
+    with get_db() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        team = _secret_realm_team_view(conn, team_id)
+        if not team:
+            return {"ok": False, "reason": "team_not_found"}
+        if user_id in team["members"]:
+            return team
+        if len(team["members"]) >= max_members:
+            return {"ok": False, "reason": "team_full"}
+        _remove_secret_realm_team_member(conn, user_id)
+        conn.execute(
+            "INSERT INTO secret_realm_team_members (team_id, user_id) VALUES (?, ?)",
+            (team_id, user_id),
+        )
+        conn.execute(
+            "UPDATE secret_realm_teams SET updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (team_id,),
+        )
+        return _secret_realm_team_view(conn, team_id)
+
+
+def leave_secret_realm_team(user_id):
+    with get_db() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        team_id = _remove_secret_realm_team_member(conn, user_id)
+        return _secret_realm_team_view(conn, team_id) if team_id else None
+
+
+def get_secret_realm_team_for_user(user_id):
+    with get_db() as conn:
+        membership = conn.execute(
+            "SELECT team_id FROM secret_realm_team_members WHERE user_id = ?",
+            (user_id,),
+        ).fetchone()
+        return _secret_realm_team_view(conn, membership["team_id"]) if membership else None
+
+
+def get_secret_realm_team(team_id):
+    with get_db() as conn:
+        return _secret_realm_team_view(conn, team_id)
+
+
+def reset_secret_realm_teams():
+    with get_db() as conn:
+        conn.execute("DELETE FROM secret_realm_teams")
 
 
 def create_user(username, password_hash):
@@ -236,6 +396,16 @@ def save_secret_realm_run(user_id, week_id, *, explorations, contribution, boss_
                    boss_damage = excluded.boss_damage""",
             (week_id, user_id, explorations, contribution, boss_damage),
         )
+
+
+def get_secret_realm_combat_state(user_id, week_id):
+    """Return the player's persisted turn state for the current realm boss."""
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT state_json FROM secret_realm_combat_states WHERE week_id = ? AND user_id = ?",
+            (week_id, user_id),
+        ).fetchone()
+    return json.loads(row["state_json"]) if row else None
 
 
 def get_secret_realm_boss(week_id, max_hp=500):
@@ -322,10 +492,22 @@ def resolve_secret_realm_boss_encounter(
     player_hp=None,
     player_mp=None,
     minimum_damage=1,
+    action_id=None,
+    combat_state=None,
 ):
     """Atomically resolve one realm-boss strike and its counterattack."""
     with get_db() as conn:
         conn.execute("BEGIN IMMEDIATE")
+        if action_id:
+            prior_action = conn.execute(
+                """SELECT result_json FROM secret_realm_actions
+                   WHERE week_id = ? AND user_id = ? AND action_id = ?""",
+                (week_id, user_id, action_id),
+            ).fetchone()
+            if prior_action:
+                result = json.loads(prior_action["result_json"])
+                result["duplicate"] = True
+                return result
         conn.execute(
             "INSERT OR IGNORE INTO secret_realm_bosses (week_id, hp, max_hp) VALUES (?, ?, ?)",
             (week_id, max_hp, max_hp),
@@ -389,19 +571,42 @@ def resolve_secret_realm_boss_encounter(
             ),
         )
 
-    return {
-        "ok": True,
-        "damage": damage,
-        "boss_hp": remaining_hp,
-        "defeated": defeated,
-        "reward_granted": defeated,
-        "player_damage": counter_damage,
-        "player_hp": restored_hp,
-        "player_mp": persisted_mp,
-        "player_died": player_died,
-        "entry_consumed": entry_consumed,
-        "entries_remaining": entry_limit - run["explorations"] - int(entry_consumed),
-    }
+        result = {
+            "ok": True,
+            "damage": damage,
+            "boss_hp": remaining_hp,
+            "defeated": defeated,
+            "reward_granted": defeated,
+            "player_damage": counter_damage,
+            "player_hp": restored_hp,
+            "player_mp": persisted_mp,
+            "player_died": player_died,
+            "entry_consumed": entry_consumed,
+            "entries_remaining": entry_limit - run["explorations"] - int(entry_consumed),
+            "duplicate": False,
+        }
+        if player_died or defeated:
+            conn.execute(
+                "DELETE FROM secret_realm_combat_states WHERE week_id = ? AND user_id = ?",
+                (week_id, user_id),
+            )
+        elif combat_state is not None:
+            conn.execute(
+                """INSERT INTO secret_realm_combat_states (week_id, user_id, state_json)
+                   VALUES (?, ?, ?)
+                   ON CONFLICT(week_id, user_id) DO UPDATE SET
+                       state_json = excluded.state_json,
+                       updated_at = CURRENT_TIMESTAMP""",
+                (week_id, user_id, json.dumps(combat_state, separators=(",", ":"))),
+            )
+        if action_id:
+            conn.execute(
+                """INSERT INTO secret_realm_actions (week_id, user_id, action_id, result_json)
+                   VALUES (?, ?, ?, ?)""",
+                (week_id, user_id, action_id, json.dumps(result, separators=(",", ":"))),
+            )
+
+    return result
 
 
 def get_secret_realm_leaderboard(week_id, limit=10):

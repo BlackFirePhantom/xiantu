@@ -324,6 +324,7 @@ function renderSecretRealm(data) {
     body.replaceChildren();
     const boss = data.boss || {};
     const player = data.player || { hp: 0, max_hp: 0, mp: 0, max_mp: 0 };
+    const combat = data.combat || { round: 1 };
     const entriesRemaining = data.entries_remaining ?? 0;
     const isDefeated = boss.hp <= 0;
 
@@ -364,6 +365,7 @@ function renderSecretRealm(data) {
         createSecretRealmStat("剩余入场", `${entriesRemaining} / 3`, "死亡或击杀后扣除"),
         createSecretRealmStat("个人战功", String(data.contribution || 0), "本周累计贡献"),
         createSecretRealmStat("造成伤害", String(data.boss_damage || 0), "对首领累计伤害"),
+        createSecretRealmStat("当前回合", `第 ${combat.round || 1} 回合`, "增益、减益与技能效果会持续结算"),
     );
     shell.appendChild(stats);
     shell.appendChild(createSecretRealmTeamPanel(data));

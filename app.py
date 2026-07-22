@@ -62,13 +62,14 @@ socketio = SocketIO(app, async_mode="threading", cors_allowed_origins=CORS_ALLOW
 from game_state import online_users, last_activity, afk_players, touch_activity
 
 def cache_flush_loop():
-    """定时后台任务：每 30 秒自动同步内存缓存中发生修改的脏数据至 SQLite 数据库"""
+    """定时后台任务：每 30 秒同步脏缓存至 SQLite，并清理超时战斗状态"""
     while True:
         socketio.sleep(30)
         try:
             game_state.flush_all_cache()
+            game_state.cleanup_stale_combats()
         except Exception as e:
-            logger.error("定时缓存同步数据库出错：%s", str(e))
+            logger.error("定时缓存同步/战斗清理出错：%s", str(e))
 
 def hash_password(password):
     """使用 werkzeug 生成安全密码哈希（带盐）"""

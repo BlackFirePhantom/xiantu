@@ -1,6 +1,5 @@
 /* ===== 仙途 — 现代深色修仙主题样式 ===== */
 
-@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@300;400;600;700&family=Cinzel+Decorative:wght@700;900&family=Inter:wght@300;400;500;600;700&display=swap');
 
 :root {
     --bg-dark: #06090d;
@@ -22,9 +21,9 @@
     --accent-purple-glow: rgba(150, 103, 196, 0.25);
     
     --glass-bg: rgba(13, 18, 25, 0.75);
-    --font-serif: "Noto Serif SC", "PingFang SC", serif;
-    --font-sans: "Inter", "Microsoft YaHei", "PingFang SC", sans-serif;
-    --font-display: "Cinzel Decorative", "Noto Serif SC", serif;
+    --font-serif: "Microsoft YaHei", "PingFang SC", "Noto Serif CJK SC", serif;
+    --font-sans: "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", sans-serif;
+    --font-display: "Microsoft YaHei", "PingFang SC", "Noto Serif CJK SC", serif;
 }
 
 * { 
@@ -349,6 +348,10 @@ a:focus-visible {
     grid-template-columns: 280px 1fr 300px;
     gap: 0;
     height: calc(100vh - 53px);
+}
+
+.game-layout.state-loading {
+    visibility: hidden;
 }
 
 .panel {
@@ -1974,4 +1977,3 @@ a:focus-visible {
         grid-template-columns: 1fr;
     }
 }
-

@@ -1,29 +1,21 @@
 """基础连接与通用状态的 Socket 事件处理器。"""
 
-import json
 from datetime import datetime, timezone
 from flask import session, request
 from flask_socketio import emit
 
 import game_state
-from models import get_leaderboard
+from models import get_leaderboard, get_secret_realm_combat_state
 from game_state import (
     get_cached_character as get_character,
     update_cached_character as update_character,
     get_character_inventory_cached as get_character_inventory,
     set_character_inventory_cached as set_character_inventory,
 )
-from game_data import (
-    LOCATIONS, SPIRIT_ROOTS, TECHNIQUES, MERIDIANS, ITEMS,
-    realm_name, lookup_item, TECHNIQUE_MAX_PROFICIENCY
-)
-from game.utils import (
-    format_duration, get_full_stats, get_exp_needed, get_cultivation_mult,
-    get_proficiency
-)
+from game_data import ITEMS, realm_name
+from game.utils import format_duration, get_full_stats, week_id
 from game.cultivation import process_offline_cultivation
-from game.npc import get_npc_info_for_location, get_quest_info, get_sect_info
-from handlers.pets import get_pet_display_info
+from services.player_state import build_player_state
 
 def register_base_handlers(socketio):
     @socketio.on("connect")
@@ -45,6 +37,11 @@ def register_base_handlers(socketio):
             game_state.last_activity.pop(username, None)
             emit("system_msg", {"text": f"{username} 离开了修仙界"}, broadcast=True, namespace="/")
         if user_id:
+            # 清理可能残留的战斗状态，持久化当前战斗 HP（防止免费满血逃脱）
+            with game_state.combat_lock:
+                combat = game_state.active_combats.pop(user_id, None)
+            if combat:
+                update_character(user_id, hp=combat["player_hp"])
             game_state.save_cached_character(user_id)
 
     @socketio.on("get_state")
@@ -75,6 +72,10 @@ def do_get_state(user_id):
 
     # 处理离线挂机（修为 + 材料掉落 + 安全区回血，与在线 AFK 路径一致）
     reward = process_offline_cultivation(char)
+    # 秘境回合尚未结束时，不能利用安全区的离线回血刷新战斗生命值。
+    # 结算（死亡或击杀首领）会自动清除该回合状态，之后恢复正常回血。
+    if get_secret_realm_combat_state(user_id, week_id()):
+        reward["heal_to_full"] = False
     if reward["exp"] > 0 or reward["drops"] or reward["heal_to_full"]:
         now_iso = datetime.now(timezone.utc).isoformat()
         updates = {"last_active": now_iso}
@@ -101,83 +102,10 @@ def do_get_state(user_id):
     else:
         update_character(user_id, last_active=datetime.now(timezone.utc).isoformat())
 
-    loc = LOCATIONS.get(char["location"], LOCATIONS["qingyun_town"])
-    stats = get_full_stats(char)
     inv = get_character_inventory(user_id)
-    inv_display = []
-    for item_id, count in inv.items():
-        item = lookup_item(item_id)
-        if item:
-            inv_display.append({
-                "id": item_id,
-                "name": item["name"],
-                "count": count,
-                "desc": item.get("desc", ""),
-                "type": item.get("type", "misc"),
-                "slot": item.get("slot")
-            })
-
-    equip_info = {"weapon": None, "armor": None, "accessory": None}
-    w = lookup_item(char["weapon"]) if char["weapon"] else None
-    if w: equip_info["weapon"] = {"id": char["weapon"], "name": w["name"], "desc": w.get("desc", ""), "slot": w.get("slot", "weapon")}
-    a = lookup_item(char["armor"]) if char["armor"] else None
-    if a: equip_info["armor"] = {"id": char["armor"], "name": a["name"], "desc": a.get("desc", ""), "slot": a.get("slot", "armor")}
-    ac = lookup_item(char["accessory"]) if char["accessory"] else None
-    if ac: equip_info["accessory"] = {"id": char["accessory"], "name": ac["name"], "desc": ac.get("desc", ""), "slot": ac.get("slot", "accessory")}
-
-    connections_display = [{"id": c, "name": LOCATIONS[c]["name"]} for c in loc["connections"] if c in LOCATIONS]
-
-    # 灵根信息
-    sr_id = char["spirit_root"]
-    sr_info = None
-    if sr_id and sr_id in SPIRIT_ROOTS:
-        sr = SPIRIT_ROOTS[sr_id]
-        sr_info = {"id": sr_id, "name": sr["name"], "desc": sr["desc"], "element": sr["element"]}
-
-    # 功法信息（含熟练度）
-    prof = get_proficiency(char)
-    learned_tech = []
-    for tid in (json.loads(char["techniques"]) if char["techniques"] else []):
-        if tid in TECHNIQUES:
-            t = TECHNIQUES[tid]
-            pv = prof.get(tid, 0)
-            learned_tech.append({
-                "id": tid, "name": t["name"], "tier": t["tier"],
-                "proficiency": pv, "max_proficiency": TECHNIQUE_MAX_PROFICIENCY,
-                "prof_pct": round(pv / TECHNIQUE_MAX_PROFICIENCY * 100),
-            })
-
-    # 经脉信息
-    opened_mer = []
-    for mid in (json.loads(char["open_meridians"]) if char["open_meridians"] else []):
-        if mid in MERIDIANS:
-            opened_mer.append({"id": mid, "name": MERIDIANS[mid]["name"]})
-
-    emit("game_state", {
-        "char": {
-            "name": char["name"], "level": char["level"], "realm": realm_name(char["level"]),
-            "exp": char["exp"], "exp_needed": get_exp_needed(char["level"]),
-            "hp": char["hp"], "max_hp": stats["max_hp"],
-            "mp": char.get("mp", stats.get("max_mp", 50)), "max_mp": stats.get("max_mp", 50),
-            "atk": stats["atk"], "def": stats["def"],
-            "gold": char["gold"], "kills": char["kills"], "deaths": char["deaths"],
-            "has_breakthrough_pill": char["has_breakthrough_pill"],
-            "cultivation_mult": round(get_cultivation_mult(char), 2),
-        },
-        "spirit_root": sr_info,
-        "techniques": learned_tech,
-        "meridians": opened_mer,
-        "location": {
-            "id": char["location"], "name": loc["name"], "desc": loc["desc"],
-            "safe": loc["safe"], "connections": connections_display,
-            "npc": loc.get("npc"), "npc_dialog": loc.get("npc_dialog"),
-        },
-        "inventory": inv_display,
-        "equipment": equip_info,
-        "pets": get_pet_display_info(char),
-        "npcs": get_npc_info_for_location(char),
-        "quests": get_quest_info(char),
-        "sect": get_sect_info(char),
-        "online_count": len(game_state.online_users),
-        "is_afk": session.get("username", "") in game_state.afk_players,
-    })
+    emit("game_state", build_player_state(
+        char,
+        inv,
+        online_count=len(game_state.online_users),
+        is_afk=session.get("username", "") in game_state.afk_players,
+    ))

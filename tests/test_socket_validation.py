@@ -59,3 +59,23 @@ def test_auth_forms_expose_labeled_autocomplete_fields():
     assert 'id="login-username" type="text" name="username" autocomplete="username"' in template
     assert 'id="login-password" type="password" name="password" autocomplete="current-password"' in template
     assert 'id="register-password" type="password" name="password" autocomplete="new-password"' in template
+    assert 'id="character-name" type="text" name="name" autocomplete="name"' in template
+
+
+def test_game_layout_stays_hidden_until_initial_socket_state_is_rendered():
+    template = Path("templates/game.html").read_text(encoding="utf-8")
+    socket_script = Path("static/js/socket.js").read_text(encoding="utf-8")
+
+    assert 'class="game-layout active-tab-game state-loading"' in template
+    assert 'aria-busy="true"' in template
+    assert 'function revealGameLayout()' in socket_script
+    assert 'layout.classList.remove("state-loading")' in socket_script
+    assert 'layout.setAttribute("aria-busy", "false")' in socket_script
+    assert 'finally {' in socket_script
+
+
+def test_secret_realm_timeout_retry_reuses_the_same_action_id():
+    main_script = Path("static/js/main.js").read_text(encoding="utf-8")
+
+    assert "const actionId = secretRealmActionId || newSecretRealmActionId();" in main_script
+    assert "clearSecretRealmChallengePending({ preserveActionId: true });" in main_script

@@ -4,6 +4,13 @@ const socket = io();
 let gameState = null;
 let currentForture = null;
 
+function revealGameLayout() {
+    const layout = document.querySelector(".game-layout");
+    if (!layout) return;
+    layout.classList.remove("state-loading");
+    layout.setAttribute("aria-busy", "false");
+}
+
 // ═══════════════ Socket 事件绑定 ═══════════════
 
 socket.on("connect", () => {
@@ -13,7 +20,10 @@ socket.on("connect", () => {
 });
 
 socket.on("disconnect", () => {
-    if (typeof clearSecretRealmChallengePending === "function") clearSecretRealmChallengePending();
+    revealGameLayout();
+    if (typeof clearSecretRealmChallengePending === "function") {
+        clearSecretRealmChallengePending({ preserveActionId: true });
+    }
     const button = document.getElementById("secret-realm-challenge-button");
     if (button && button.textContent === "正在交锋…") {
         button.disabled = false;
@@ -22,11 +32,18 @@ socket.on("disconnect", () => {
     addLog("秘境连接已中断，恢复连接后可以重试。", "error");
 });
 
-socket.on("connect_error", () => addLog("无法连接到仙途服务器。", "error"));
+socket.on("connect_error", () => {
+    revealGameLayout();
+    addLog("无法连接到仙途服务器。", "error");
+});
 
 socket.on("game_state", (data) => {
     gameState = data;
-    renderState(data);
+    try {
+        renderState(data);
+    } finally {
+        revealGameLayout();
+    }
 });
 
 socket.on("need_create", () => { window.location.href = "/create"; });

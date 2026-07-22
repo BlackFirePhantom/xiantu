@@ -60,6 +60,69 @@ from handlers.combat import (
     _effective_atk, _effective_def, _decrement_buffs, _calc_damage,
     _execute_skill, _process_player_action, _monster_turn,
 )
+from game.combat_engine import create_combat_state, serialize_combat_state
+
+
+def test_create_combat_state_provides_one_canonical_shape():
+    state = create_combat_state(
+        kind="wild",
+        monster={"name": "青狼", "level": 1, "skills": []},
+        monster_hp=30,
+        monster_max_hp=30,
+        monster_atk=8,
+        monster_def=3,
+        player_hp=100,
+        player_max_hp=100,
+        player_mp=50,
+        player_max_mp=50,
+        player_atk=10,
+        player_def=5,
+    )
+
+    assert state["schema_version"] == 1
+    assert state["kind"] == "wild"
+    assert state["round"] == 1
+    assert state["player_buffs"] == {}
+    assert state["monster_debuffs"] == {}
+    assert state["defending"] is False
+
+
+def test_serialize_combat_state_exposes_the_shared_frontend_contract():
+    state = create_combat_state(
+        kind="secret_realm",
+        monster={"name": "赤焰妖王", "level": 1, "skills": []},
+        monster_hp=500,
+        monster_max_hp=560,
+        monster_atk=12,
+        monster_def=4,
+        player_hp=80,
+        player_max_hp=100,
+        player_mp=30,
+        player_max_mp=50,
+        player_atk=10,
+        player_def=5,
+        round_number=3,
+        log=["第三回合"],
+    )
+
+    payload = serialize_combat_state(state, skills=[{"tech_id": "modao_rumen"}])
+
+    assert payload == {
+        "schema_version": 1,
+        "kind": "secret_realm",
+        "monster": {"name": "赤焰妖王", "level": 1, "skills": []},
+        "monster_hp": 500,
+        "monster_max_hp": 560,
+        "player_hp": 80,
+        "player_max_hp": 100,
+        "player_mp": 30,
+        "player_max_mp": 50,
+        "skills": [{"tech_id": "modao_rumen"}],
+        "round": 3,
+        "log": ["第三回合"],
+        "player_buffs": {},
+        "monster_buffs": {},
+    }
 
 
 class TestEffectiveAtkDef:

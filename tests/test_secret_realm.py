@@ -124,6 +124,60 @@ def test_boss_encounter_persists_skill_updated_hp_and_mp(tmp_path, monkeypatch):
     assert finishing["entries_remaining"] == EXPLORATION_LIMIT - 1
 
 
+def test_realm_action_id_is_idempotent_and_preserves_turn_state(tmp_path, monkeypatch):
+    monkeypatch.setattr(models, "DB_PATH", str(tmp_path / "realm_action_id.db"))
+    models.init_db()
+    with models.get_db() as conn:
+        conn.execute("INSERT INTO users (id, username, password_hash) VALUES (1, 'tester', 'unused')")
+        conn.execute(
+            "INSERT INTO characters (user_id, name, hp, max_hp, mp, location) VALUES (1, 'tester', 100, 100, 50, 'chiyan_forest')"
+        )
+
+    turn_state = {
+        "round": 2,
+        "player_buffs": {"atk": {"value": 5, "rounds": 2}},
+        "player_debuffs": {},
+        "monster_buffs": {},
+        "monster_debuffs": {},
+    }
+    first = models.resolve_secret_realm_boss_encounter(
+        1, "2026-W29", player_damage=20, player_defense=5, boss_attack=25,
+        max_hp=100, entry_limit=3, action_id="realm-action-001", combat_state=turn_state,
+    )
+    duplicate = models.resolve_secret_realm_boss_encounter(
+        1, "2026-W29", player_damage=99, player_defense=0, boss_attack=99,
+        max_hp=100, entry_limit=3, action_id="realm-action-001", combat_state={"round": 99},
+    )
+
+    assert first["damage"] == 20
+    assert duplicate["duplicate"] is True
+    assert duplicate["damage"] == first["damage"]
+    assert models.get_secret_realm_boss("2026-W29", max_hp=100)["hp"] == 80
+    assert models.get_secret_realm_combat_state(1, "2026-W29") == turn_state
+
+
+def test_realm_turn_state_clears_after_boss_defeat(tmp_path, monkeypatch):
+    monkeypatch.setattr(models, "DB_PATH", str(tmp_path / "realm_turn_reset.db"))
+    models.init_db()
+    with models.get_db() as conn:
+        conn.execute("INSERT INTO users (id, username, password_hash) VALUES (1, 'tester', 'unused')")
+        conn.execute(
+            "INSERT INTO characters (user_id, name, hp, max_hp, mp, location) VALUES (1, 'tester', 100, 100, 50, 'chiyan_forest')"
+        )
+
+    models.resolve_secret_realm_boss_encounter(
+        1, "2026-W29", player_damage=20, player_defense=99, boss_attack=1,
+        max_hp=100, entry_limit=3, action_id="realm-action-002", combat_state={"round": 2},
+    )
+    finishing = models.resolve_secret_realm_boss_encounter(
+        1, "2026-W29", player_damage=80, player_defense=99, boss_attack=1,
+        max_hp=100, entry_limit=3, action_id="realm-action-003", combat_state={"round": 3},
+    )
+
+    assert finishing["defeated"] is True
+    assert models.get_secret_realm_combat_state(1, "2026-W29") is None
+
+
 def test_boss_death_returns_to_safety_and_exhausted_entries_block_entry(tmp_path, monkeypatch):
     monkeypatch.setattr(models, "DB_PATH", str(tmp_path / "realm_death.db"))
     models.init_db()
@@ -195,6 +249,81 @@ def test_secret_realm_socket_state_shows_player_hp_and_consumes_entry(tmp_path, 
             game_state.dirty_users.clear()
 
 
+def test_secret_realm_challenge_acknowledges_the_action_id(tmp_path, monkeypatch):
+    monkeypatch.setattr(models, "DB_PATH", str(tmp_path / "realm_socket_ack.db"))
+    models.init_db()
+    with models.get_db() as conn:
+        conn.execute("INSERT INTO users (id, username, password_hash) VALUES (1, 'tester', 'unused')")
+        conn.execute(
+            "INSERT INTO characters (user_id, name, hp, max_hp, mp, location) VALUES (1, 'tester', 100, 100, 50, 'chiyan_forest')"
+        )
+    with game_state.cache_lock:
+        game_state.character_cache.clear()
+        game_state.dirty_users.clear()
+
+    import handlers.secret_realm as realm_handlers
+    monkeypatch.setattr(realm_handlers, "_week_id", lambda: "2026-W29")
+    from app import app, socketio
+
+    try:
+        flask_client = app.test_client()
+        with flask_client.session_transaction() as session:
+            session["user_id"] = 1
+            session["username"] = "tester"
+        client = socketio.test_client(app, flask_test_client=flask_client)
+        result = client.emit(
+            "secret_realm_challenge",
+            {"action": "attack", "action_id": "realm-socket-action-001"},
+            callback=True,
+        )
+
+        assert result == {"ok": True, "action_id": "realm-socket-action-001", "duplicate": False}
+        client.disconnect()
+    finally:
+        reset_teams()
+        with game_state.cache_lock:
+            game_state.character_cache.clear()
+            game_state.dirty_users.clear()
+
+
+def test_active_realm_turn_blocks_safety_zone_auto_heal(tmp_path, monkeypatch):
+    monkeypatch.setattr(models, "DB_PATH", str(tmp_path / "realm_safe_heal.db"))
+    models.init_db()
+    with models.get_db() as conn:
+        conn.execute("INSERT INTO users (id, username, password_hash) VALUES (1, 'tester', 'unused')")
+        conn.execute(
+            """INSERT INTO characters (user_id, name, hp, max_hp, mp, location, last_active)
+               VALUES (1, 'tester', 100, 100, 50, 'qingyun_town', '2020-01-01T00:00:00+00:00')"""
+        )
+    models.resolve_secret_realm_boss_encounter(
+        1, "2026-W29", player_damage=10, player_defense=0, boss_attack=20,
+        max_hp=100, entry_limit=3, action_id="realm-no-safe-heal", combat_state={"round": 2},
+    )
+    with game_state.cache_lock:
+        game_state.character_cache.clear()
+        game_state.dirty_users.clear()
+
+    import handlers.base as base_handlers
+    monkeypatch.setattr(base_handlers, "week_id", lambda: "2026-W29")
+    from app import app, socketio
+
+    try:
+        flask_client = app.test_client()
+        with flask_client.session_transaction() as session:
+            session["user_id"] = 1
+            session["username"] = "tester"
+        client = socketio.test_client(app, flask_test_client=flask_client)
+        client.emit("get_state")
+        state = [event["args"][0] for event in client.get_received() if event["name"] == "game_state"][-1]
+
+        assert state["char"]["hp"] == 80
+        client.disconnect()
+    finally:
+        with game_state.cache_lock:
+            game_state.character_cache.clear()
+            game_state.dirty_users.clear()
+
+
 def test_secret_realm_challenge_returns_error_state_when_settlement_fails(tmp_path, monkeypatch):
     monkeypatch.setattr(models, "DB_PATH", str(tmp_path / "realm_socket_error.db"))
     models.init_db()
@@ -205,9 +334,10 @@ def test_secret_realm_challenge_returns_error_state_when_settlement_fails(tmp_pa
         )
 
     import handlers.secret_realm as realm_handlers
+    import services.secret_realm as realm_service
     monkeypatch.setattr(realm_handlers, "_week_id", lambda: "2026-W29")
     monkeypatch.setattr(
-        realm_handlers,
+        realm_service,
         "resolve_secret_realm_boss_encounter",
         lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("database unavailable")),
     )

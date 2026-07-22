@@ -1,7 +1,7 @@
 """战斗相关的 Socket 事件处理器（回合制）。"""
 
-import json
 import random
+import time
 import logging
 from flask import session
 from flask_socketio import emit
@@ -19,59 +19,21 @@ from game_data import (
     ITEMS, MONSTERS, realm_name, spawn_monster
 )
 from game.combat import fmt_attack, fmt_monster_attack
+from game.combat_engine import (
+    calc_damage as _calc_damage,
+    create_combat_state,
+    decrement_buffs as _decrement_buffs,
+    effective_atk as _effective_atk,
+    effective_def as _effective_def,
+    execute_skill as _execute_skill,
+    get_player_skills as _get_player_skills,
+    process_player_action as _process_player_action,
+    serialize_combat_state,
+)
 from game.utils import get_full_stats, gain_proficiency, get_exp_needed, calc_max_mp
 from handlers.npc import _check_quest_progress
 
 logger = logging.getLogger("xiantu.handlers.combat")
-
-
-def _get_player_skills(char):
-    """获取玩家已学功法中的可用技能列表"""
-    learned = json.loads(char["techniques"]) if char["techniques"] else []
-    skills = []
-    for tid in learned:
-        t = TECHNIQUES.get(tid)
-        if t and t.get("skill"):
-            skills.append({"tech_id": tid, "name": t["name"], "skill": t["skill"]})
-    return skills
-
-
-def _effective_atk(combat, is_player):
-    """计算有效攻击力（含buff/debuff）"""
-    if is_player:
-        base = combat["player_atk"]
-        mult = combat["player_buffs"].get("atk", {}).get("mult", 1.0)
-        debuff_mult = combat["player_debuffs"].get("atk", {}).get("mult", 1.0)
-        return int(base * mult * debuff_mult)
-    else:
-        base = combat["monster_atk"]
-        mult = combat["monster_buffs"].get("atk", {}).get("mult", 1.0)
-        debuff_mult = combat["monster_debuffs"].get("atk", {}).get("mult", 1.0)
-        return int(base * mult * debuff_mult)
-
-
-def _effective_def(combat, is_player):
-    """计算有效防御力（含buff/debuff）"""
-    if is_player:
-        base = combat["player_def"]
-        mult = combat["player_buffs"].get("def", {}).get("mult", 1.0)
-        return int(base * mult)
-    else:
-        base = combat["monster_def"]
-        mult = combat["monster_buffs"].get("def", {}).get("mult", 1.0)
-        return int(base * mult)
-
-
-def _decrement_buffs(combat):
-    """回合结束时递减所有buff/debuff持续时间"""
-    for buff_dict in ("player_buffs", "player_debuffs", "monster_buffs", "monster_debuffs"):
-        expired = []
-        for stat, info in combat[buff_dict].items():
-            info["rounds"] -= 1
-            if info["rounds"] <= 0:
-                expired.append(stat)
-        for stat in expired:
-            del combat[buff_dict][stat]
 
 
 def do_fight():
@@ -145,230 +107,49 @@ def do_fight():
             break
 
     max_mp = stats.get("max_mp", calc_max_mp(char["level"]))
-    combat = {
-        "monster": monster, "monster_id": monster_id,
-        "monster_hp": monster["hp"], "monster_max_hp": monster["hp"],
-        "monster_atk": monster["atk"], "monster_def": monster["def"],
-        "player_hp": char["hp"], "player_max_hp": stats["max_hp"],
-        "player_mp": char.get("mp", max_mp) if isinstance(char.get("mp"), int) else max_mp,
-        "player_max_mp": max_mp,
-        "player_atk": player_atk, "player_def": stats["def"],
-        "round": 1, "log": log,
-        "player_buffs": {}, "player_debuffs": {},
-        "monster_buffs": {}, "monster_debuffs": {},
-        "defending": False, "monster_defending": False,
-        "loc_id": char["location"], "bonus_drop_event": bonus_drop_event,
-        "element_msg": element_msg,
-        "monster_element": monster.get("element"),
-        "player_element": sr_element,
-        "char_level": char["level"],
-    }
+    combat = create_combat_state(
+        kind="wild",
+        monster=monster,
+        monster_hp=monster["hp"],
+        monster_max_hp=monster["hp"],
+        monster_atk=monster["atk"],
+        monster_def=monster["def"],
+        player_hp=char["hp"],
+        player_max_hp=stats["max_hp"],
+        player_mp=char.get("mp", max_mp) if isinstance(char.get("mp"), int) else max_mp,
+        player_max_mp=max_mp,
+        player_atk=player_atk,
+        player_def=stats["def"],
+        log=log,
+        monster_id=monster_id,
+        loc_id=char["location"],
+        bonus_drop_event=bonus_drop_event,
+        element_msg=element_msg,
+        monster_element=monster.get("element"),
+        player_element=sr_element,
+        char_level=char["level"],
+        last_action_at=time.time(),
+        username=session.get("username", ""),
+    )
 
     with game_state.combat_lock:
         game_state.active_combats[user_id] = combat
 
     skills = _get_player_skills(char)
-    emit("combat_start", {
-        "monster": {"name": monster["name"], "level": monster["level"],
-                     "element": monster.get("element"), "skills": monster.get("skills", []),
-                     "atk": monster["atk"], "def": monster["def"],
-                     "realm": realm_name(monster["level"])},
-        "monster_hp": combat["monster_hp"], "monster_max_hp": combat["monster_max_hp"],
-        "player_hp": combat["player_hp"], "player_max_hp": combat["player_max_hp"],
-        "player_mp": combat["player_mp"], "player_max_mp": combat["player_max_mp"],
-        "skills": skills, "round": 1, "log": log,
-        "player_buffs": {}, "monster_buffs": {},
-    })
-
-
-def _process_player_action(combat, action, skill_id, char, user_id):
-    """处理玩家行动，返回日志列表"""
-    log = []
-    combat["defending"] = False
-
-    if action == "defend":
-        combat["defending"] = True
-        heal = max(1, combat["player_max_hp"] // 20)
-        combat["player_hp"] = min(combat["player_max_hp"], combat["player_hp"] + heal)
-        log.append(f"[第{combat['round']}回合] 你屏息凝神，防御姿态，恢复 {heal} 气血。")
-        return log
-
-    if action == "flee":
-        flee_chance = min(0.8, 0.3 + (combat["char_level"] - combat["monster"]["level"]) * 0.1)
-        if random.random() < flee_chance:
-            log.append("你御剑遁走，成功脱离战斗！")
-            combat["_fled"] = True
-        else:
-            log.append("你转身欲逃，却被妖兽截住了去路！")
-        return log
-
-    if action == "skill" and skill_id:
-        t = TECHNIQUES.get(skill_id)
-        if not t or not t.get("skill"):
-            action = "attack"
-        else:
-            skill = t["skill"]
-            mp_cost = skill.get("mp_cost", 0)
-            if combat["player_mp"] < mp_cost:
-                log.append(f"灵力不足，无法施展【{skill['name']}】！改为普通攻击。")
-                action = "attack"
-            else:
-                combat["player_mp"] -= mp_cost
-                return _execute_skill(combat, skill, char, log, is_player=True)
-
-    if action == "attack":
-        dmg = _calc_damage(combat, is_player_attacker=True)
-        combat["monster_hp"] -= dmg
-        log.append(f"[第{combat['round']}回合] {fmt_attack(combat['monster']['name'])}，造成 {dmg} 点伤害。")
-        if combat["monster_hp"] <= 0:
-            log.append(f"{combat['monster']['name']}哀鸣一声，庞大的身躯轰然倒地，妖丹碎裂，灵气四散！")
-
-    return log
-
-
-def _execute_skill(combat, skill, char, log, is_player):
-    """执行技能效果"""
-    if is_player:
-        target_hp = "monster_hp"
-        attacker_name = "你"
-        target_name = combat["monster"]["name"]
-        atk = _effective_atk(combat, is_player=True)
-        def_ = _effective_def(combat, is_player=False)
-        max_hp = combat["player_max_hp"]
-    else:
-        target_hp = "player_hp"
-        attacker_name = combat["monster"]["name"]
-        target_name = "你"
-        atk = _effective_atk(combat, is_player=False)
-        def_ = _effective_def(combat, is_player=True)
-        max_hp = combat["player_max_hp"]
-
-    stype = skill["type"]
-    sname = skill["name"]
-
-    if stype == "attack":
-        dmg = max(1, int(atk * skill["power"]) - def_ + random.randint(-2, 3))
-        if is_player:
-            combat["monster_hp"] -= dmg
-            log.append(f"[第{combat['round']}回合] 你施展【{sname}】，造成 {dmg} 点伤害！")
-            if combat["monster_hp"] <= 0:
-                log.append(f"{combat['monster']['name']}哀鸣一声，庞大的身躯轰然倒地！")
-        else:
-            if combat["defending"]:
-                dmg = dmg // 2
-            combat["player_hp"] -= dmg
-            log.append(f"[第{combat['round']}回合] {combat['monster']['name']}施展【{sname}】，你受到 {dmg} 点伤害！")
-
-    elif stype == "multi_hit":
-        hits = skill.get("hits", 2)
-        total = 0
-        for i in range(hits):
-            dmg = max(1, int(atk * skill["power"]) - def_ + random.randint(-2, 3))
-            total += dmg
-            who = "你" if is_player else combat["monster"]["name"]
-            log.append(f"  第{i+1}击：{dmg} 点伤害！")
-        if is_player:
-            combat["monster_hp"] -= total
-            log.insert(-hits, f"[第{combat['round']}回合] 你施展【{sname}】，{hits}连击！")
-            if combat["monster_hp"] <= 0:
-                log.append(f"{combat['monster']['name']}在连击中倒下！")
-        else:
-            if combat["defending"]:
-                total = total // 2
-            combat["player_hp"] -= total
-            log.insert(-hits, f"[第{combat['round']}回合] {combat['monster']['name']}施展【{sname}】，{hits}连击！")
-
-    elif stype == "heal":
-        heal = int(max_hp * skill["power"])
-        if is_player:
-            combat["player_hp"] = min(max_hp, combat["player_hp"] + heal)
-            log.append(f"[第{combat['round']}回合] 你施展【{sname}】，恢复 {heal} 气血。")
-        else:
-            combat["monster_hp"] = min(combat["monster_max_hp"], combat["monster_hp"] + heal)
-            log.append(f"[第{combat['round']}回合] {combat['monster']['name']}施展【{sname}】，恢复 {heal} 气血。")
-
-    elif stype == "defense":
-        dur = skill.get("duration", 2)
-        power = skill.get("power", 0.3)
-        if is_player:
-            combat["player_buffs"]["def"] = {"mult": 1.0 - power, "rounds": dur}
-            log.append(f"[第{combat['round']}回合] 你施展【{sname}】，减伤{int(power*100)}%，持续{dur}回合。")
-        else:
-            combat["monster_buffs"]["def"] = {"mult": 1.0 - power, "rounds": dur}
-            log.append(f"[第{combat['round']}回合] {combat['monster']['name']}施展【{sname}】，减伤{int(power*100)}%！")
-
-    elif stype == "buff":
-        dur = skill.get("duration", 3)
-        power = skill.get("power", 0.2)
-        target = skill.get("target", "atk")
-        if is_player:
-            if target == "all":
-                combat["player_buffs"]["atk"] = {"mult": 1.0 + power, "rounds": dur}
-                combat["player_buffs"]["def"] = {"mult": 1.0 + power, "rounds": dur}
-            else:
-                combat["player_buffs"][target] = {"mult": 1.0 + power, "rounds": dur}
-            log.append(f"[第{combat['round']}回合] 你施展【{sname}】，{target}+{int(power*100)}%，持续{dur}回合。")
-        else:
-            if target == "all":
-                combat["monster_buffs"]["atk"] = {"mult": 1.0 + power, "rounds": dur}
-                combat["monster_buffs"]["def"] = {"mult": 1.0 + power, "rounds": dur}
-            else:
-                combat["monster_buffs"][target] = {"mult": 1.0 + power, "rounds": dur}
-            log.append(f"[第{combat['round']}回合] {combat['monster']['name']}施展【{sname}】，{target}提升！")
-
-    elif stype == "debuff":
-        dur = skill.get("duration", 2)
-        power = skill.get("power", 0.3)
-        debuff_target = skill.get("target", "monster_atk")
-        stat = "atk" if "atk" in debuff_target else "def"
-        mult = 1.0 - power
-        if is_player:
-            combat["monster_debuffs"][stat] = {"mult": mult, "rounds": dur}
-            log.append(f"[第{combat['round']}回合] 你施展【{sname}】，{combat['monster']['name']}的{stat}-{int(power*100)}%！")
-        else:
-            combat["player_debuffs"][stat] = {"mult": mult, "rounds": dur}
-            log.append(f"[第{combat['round']}回合] {combat['monster']['name']}施展【{sname}】，你的{stat}-{int(power*100)}%！")
-
-    elif stype == "lifesteal":
-        dmg = max(1, int(atk * skill["power"]) - def_ + random.randint(-2, 3))
-        heal = int(dmg * skill.get("lifesteal_pct", 0.3))
-        if is_player:
-            if combat["defending"]:
-                dmg = dmg // 2
-            combat["monster_hp"] -= dmg
-            combat["player_hp"] = min(combat["player_max_hp"], combat["player_hp"] + heal)
-            log.append(f"[第{combat['round']}回合] 你施展【{sname}】，造成 {dmg} 伤害并吸取 {heal} 气血！")
-            if combat["monster_hp"] <= 0:
-                log.append(f"{combat['monster']['name']}哀鸣一声，倒地不起！")
-        else:
-            if combat["defending"]:
-                dmg = dmg // 2
-            combat["player_hp"] -= dmg
-            combat["monster_hp"] = min(combat["monster_max_hp"], combat["monster_hp"] + heal)
-            log.append(f"[第{combat['round']}回合] {combat['monster']['name']}施展【{sname}】，你受到 {dmg} 伤害并被吸取 {heal} 气血！")
-
-    # 处理附带debuff效果
-    if skill.get("debuff"):
-        db = skill["debuff"]
-        dur = db.get("rounds", 2)
-        stat = "atk" if "atk" in db.get("target", "") else "def"
-        if is_player:
-            combat["monster_debuffs"][stat] = {"mult": db["mult"], "rounds": dur}
-        else:
-            combat["player_debuffs"][stat] = {"mult": db["mult"], "rounds": dur}
-
-    return log
-
-
-def _calc_damage(combat, is_player_attacker):
-    """计算普通攻击伤害"""
-    if is_player_attacker:
-        atk = _effective_atk(combat, is_player=True)
-        def_ = _effective_def(combat, is_player=False)
-    else:
-        atk = _effective_atk(combat, is_player=False)
-        def_ = _effective_def(combat, is_player=True)
-    return max(1, atk - def_ + random.randint(-2, 3))
+    monster_view = {
+        "name": monster["name"],
+        "level": monster["level"],
+        "element": monster.get("element"),
+        "skills": monster.get("skills", []),
+        "atk": monster["atk"],
+        "def": monster["def"],
+        "realm": realm_name(monster["level"]),
+    }
+    emit("combat_start", serialize_combat_state(
+        combat,
+        monster=monster_view,
+        skills=skills,
+    ))
 
 
 def _monster_turn(combat):
@@ -514,6 +295,9 @@ def do_fight_action(data):
         if not combat:
             emit("game_msg", {"text": "没有进行中的战斗。", "type": "error"})
             return
+
+        # 更新最后操作时间，防止后台超时扫描误清理
+        combat["last_action_at"] = time.time()
 
         char = get_character(user_id)
         if not char:
