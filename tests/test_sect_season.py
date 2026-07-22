@@ -14,7 +14,7 @@ def test_weekly_modifier_is_deterministic_and_exposes_gameplay_effects():
     second = get_season_modifier("2026-W30")
 
     assert first == second
-    assert {"id", "name", "description", "gold_bonus", "contribution_bonus", "boss_damage_multiplier"} <= first.keys()
+    assert {"id", "name", "description", "boss_damage_multiplier"} <= first.keys()
     assert first["boss_damage_multiplier"] >= 1
 
 

@@ -11,7 +11,7 @@ from flask import Flask, render_template, request, redirect, send_from_directory
 from flask_socketio import SocketIO, emit
 from werkzeug.security import generate_password_hash, check_password_hash
 
-from config import SECRET_KEY, CORS_ALLOWED_ORIGINS, HOST, PORT, AFK_TIMEOUT, AFK_MAX_HOURS, AFK_INTERVAL
+from config import SECRET_KEY, CORS_ALLOWED_ORIGINS, HOST, PORT, AFK_TIMEOUT
 
 from models import (
     init_db, create_user, get_user, create_character,
@@ -162,6 +162,9 @@ def create():
         name = request.form.get("name", "").strip()
         if not name or len(name) < 1 or len(name) > 12:
             return render_template("index.html", page="create", error="道号1-12个字符")
+        # 拒绝包含 HTML 特殊字符的道号，防止存储型 XSS
+        if any(c in name for c in '<>"\'&/`'):
+            return render_template("index.html", page="create", error="道号不可包含特殊字符")
         root = roll_spirit_root()
         if create_character(session["user_id"], name, root):
             return redirect(url_for("game"))

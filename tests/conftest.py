@@ -14,6 +14,8 @@ def make_char():
             "exp": 0,
             "hp": 100,
             "max_hp": 100,
+            "mp": 50,
+            "max_mp": 50,
             "atk": 10,
             "def_stat": 5,
             "gold": 100,
@@ -52,3 +54,35 @@ def make_inv():
         inv.update(kwargs)
         return inv
     return _make_inv
+
+
+@pytest.fixture
+def make_combat():
+    """战斗字典工厂，结构参考 handlers/combat.py:148-165 的 combat dict。"""
+    def _make_combat(**kwargs):
+        defaults = {
+            "monster": {"name": "青狼", "level": 1, "atk": 8, "def": 3, "hp": 30, "skills": []},
+            "monster_id": "green_wolf",
+            "monster_hp": 30,
+            "monster_max_hp": 30,
+            "monster_atk": 8,
+            "monster_def": 3,
+            "player_hp": 100,
+            "player_max_hp": 100,
+            "player_mp": 50,
+            "player_max_mp": 50,
+            "player_atk": 10,
+            "player_def": 5,
+            "round": 1,
+            "log": [],
+            "player_buffs": {},
+            "player_debuffs": {},
+            "monster_buffs": {},
+            "monster_debuffs": {},
+            "defending": False,
+            "monster_defending": False,
+            "char_level": 1,
+        }
+        defaults.update(kwargs)
+        return defaults
+    return _make_combat

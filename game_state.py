@@ -7,8 +7,8 @@ import threading
 import models
 
 # 导入配置和游戏常数
-from config import AFK_TIMEOUT, AFK_MAX_HOURS, AFK_INTERVAL
-from game_data import IDLE_EXP_PER_SEC
+from config import AFK_TIMEOUT
+from game_data import IDLE_EXP_PER_SEC, IDLE_MAX_HOURS
 
 logger = logging.getLogger("xiantu.game_state")
 
@@ -189,58 +189,47 @@ def touch_activity(username):
         _settle_afk_reward(username, idle_duration)
 
 def _settle_afk_reward(username, idle_duration):
-    """挂机收益的惰性延迟结算具体逻辑。"""
-    max_duration = AFK_MAX_HOURS * 3600
-    gain_seconds = min(idle_duration, max_duration)
-    
+    """挂机收益的惰性延迟结算具体逻辑。
+
+    使用 ``game.cultivation.compute_idle_reward`` 与离线路径共享同一套收益逻辑
+    （修为 + 材料掉落 + 安全区回血），确保两条路径产出一致。
+    """
     user = models.get_user(username)
     if not user:
         return
-    
+
     char = get_cached_character(user["id"])
     if not char:
         return
-        
-    from game_data import LOCATIONS, ITEMS
-    from game.utils import get_cultivation_mult, get_full_stats, format_duration, get_exp_needed
-    import random
-    
-    loc = LOCATIONS.get(char["location"], LOCATIONS["qingyun_town"])
-    mult = get_cultivation_mult(char)
-    exp_gain = int(IDLE_EXP_PER_SEC * gain_seconds * mult)
-    
-    # 模拟概率掉落
-    drops = []
-    if not loc["safe"]:
-        # 每隔 AFK_INTERVAL (10秒) 有 30% 几率掉落一个材料
-        # 为了防循环过大，上限限制尝试次数为 150 次
-        attempts = min(150, int(gain_seconds / AFK_INTERVAL))
-        mat_pool = ["lingcao", "yaogu", "yaopimo", "hantie_kuang"]
-        for _ in range(attempts):
-            if random.random() < 0.3:
-                drops.append(random.choice(mat_pool))
-                
-    # 写入背包
-    inv = get_character_inventory_cached(user["id"])
-    for item_id in drops:
-        inv[item_id] = inv.get(item_id, 0) + 1
-    set_character_inventory_cached(user["id"], inv)
-    
-    # 更新经验（char 引用已在上方获取，缓存返回的是同一 dict）
-    if get_exp_needed(char["level"]) != "-":
-        update_cached_character(user["id"], exp=char["exp"] + exp_gain)
-        
+
+    from game.cultivation import compute_idle_reward
+    from game_data import ITEMS
+    from game.utils import get_full_stats, format_duration
+
+    reward = compute_idle_reward(char, idle_duration)
+
+    # 写入掉落物品到背包
+    if reward["drops"]:
+        inv = get_character_inventory_cached(user["id"])
+        for item_id in reward["drops"]:
+            inv[item_id] = inv.get(item_id, 0) + 1
+        set_character_inventory_cached(user["id"], inv)
+
+    # 更新经验（满级时 exp=0，自动跳过）
+    if reward["exp"] > 0:
+        update_cached_character(user["id"], exp=char["exp"] + reward["exp"])
+
     # 安全区自动回血
-    if loc["safe"]:
+    if reward["heal_to_full"]:
         stats = get_full_stats(char)
         update_cached_character(user["id"], hp=stats["max_hp"])
-        
+
     # 通知客户端
     sid = online_users.get(username)
     if socketio and sid:
         socketio.emit("afk_status", {"afk": False}, room=sid)
         socketio.emit("afk_tick", {
-            "exp": exp_gain,
-            "drops": [ITEMS[d]["name"] for d in drops],
-            "duration": format_duration(int(gain_seconds)),
+            "exp": reward["exp"],
+            "drops": [ITEMS[d]["name"] for d in reward["drops"] if d in ITEMS],
+            "duration": format_duration(reward["elapsed"]),
         }, room=sid)

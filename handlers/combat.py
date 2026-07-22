@@ -507,77 +507,76 @@ def do_fight_action(data):
     user_id = session["user_id"]
     game_state.touch_activity(session.get("username", ""))
 
+    # 持锁覆盖整个 action 处理流程，防止同用户多连接并发 fight_action
+    # 导致 combat dict 的 in-place mutation 竞态。
     with game_state.combat_lock:
         combat = game_state.active_combats.get(user_id)
         if not combat:
             emit("game_msg", {"text": "没有进行中的战斗。", "type": "error"})
             return
 
-    char = get_character(user_id)
-    if not char:
-        return
+        char = get_character(user_id)
+        if not char:
+            return
 
-    action = data.get("action", "attack")
-    skill_id = data.get("skill_id")
+        action = data.get("action", "attack")
+        skill_id = data.get("skill_id")
 
-    # 处理玩家行动
-    player_log = _process_player_action(combat, action, skill_id, char, user_id)
-    combat["log"].extend(player_log)
+        # 处理玩家行动
+        player_log = _process_player_action(combat, action, skill_id, char, user_id)
+        combat["log"].extend(player_log)
 
-    # 检查怪物是否已死或玩家逃跑
-    fled = combat.get("_fled", False)
-    if fled:
-        result = _finish_combat(user_id, combat, char)
-        with game_state.combat_lock:
+        # 检查怪物是否已死或玩家逃跑
+        fled = combat.get("_fled", False)
+        if fled:
+            result = _finish_combat(user_id, combat, char)
             game_state.active_combats.pop(user_id, None)
-        emit("combat_end", {"won": False, "fled": True, "log": result["log"]})
-        from handlers.base import do_get_state
-        do_get_state(user_id)
-        return
+            emit("combat_end", {"won": False, "fled": True, "log": result["log"]})
+            from handlers.base import do_get_state
+            do_get_state(user_id)
+            return
 
-    if combat["monster_hp"] <= 0:
-        result = _finish_combat(user_id, combat, char)
-        with game_state.combat_lock:
+        if combat["monster_hp"] <= 0:
+            result = _finish_combat(user_id, combat, char)
             game_state.active_combats.pop(user_id, None)
-        emit("combat_end", result)
-        from handlers.base import do_get_state
-        do_get_state(user_id)
-        return
+            emit("combat_end", result)
+            from handlers.base import do_get_state
+            do_get_state(user_id)
+            return
 
-    # 怪物回合
-    monster_log = _monster_turn(combat)
-    combat["log"].extend(monster_log)
+        # 怪物回合
+        monster_log = _monster_turn(combat)
+        combat["log"].extend(monster_log)
 
-    # 递减buff/debuff
-    _decrement_buffs(combat)
+        # 递减buff/debuff
+        _decrement_buffs(combat)
 
-    # MP恢复
-    combat["player_mp"] = min(combat["player_max_mp"], combat["player_mp"] + 5)
+        # MP恢复
+        combat["player_mp"] = min(combat["player_max_mp"], combat["player_mp"] + 5)
 
-    # 检查玩家是否死亡
-    if combat["player_hp"] <= 0:
-        combat["player_hp"] = 0
-        result = _finish_combat(user_id, combat, char)
-        with game_state.combat_lock:
+        # 检查玩家是否死亡
+        if combat["player_hp"] <= 0:
+            combat["player_hp"] = 0
+            result = _finish_combat(user_id, combat, char)
             game_state.active_combats.pop(user_id, None)
-        emit("combat_end", result)
-        from handlers.base import do_get_state
-        do_get_state(user_id)
-        return
+            emit("combat_end", result)
+            from handlers.base import do_get_state
+            do_get_state(user_id)
+            return
 
-    # 进入下一回合
-    combat["round"] += 1
-    skills = _get_player_skills(char)
-    emit("combat_round", {
-        "round": combat["round"],
-        "log": player_log + monster_log,
-        "player_hp": combat["player_hp"], "player_max_hp": combat["player_max_hp"],
-        "player_mp": combat["player_mp"], "player_max_mp": combat["player_max_mp"],
-        "monster_hp": max(0, combat["monster_hp"]), "monster_max_hp": combat["monster_max_hp"],
-        "player_buffs": combat["player_buffs"], "player_debuffs": combat["player_debuffs"],
-        "monster_buffs": combat["monster_buffs"], "monster_debuffs": combat["monster_debuffs"],
-        "skills": skills,
-    })
+        # 进入下一回合
+        combat["round"] += 1
+        skills = _get_player_skills(char)
+        emit("combat_round", {
+            "round": combat["round"],
+            "log": player_log + monster_log,
+            "player_hp": combat["player_hp"], "player_max_hp": combat["player_max_hp"],
+            "player_mp": combat["player_mp"], "player_max_mp": combat["player_max_mp"],
+            "monster_hp": max(0, combat["monster_hp"]), "monster_max_hp": combat["monster_max_hp"],
+            "player_buffs": combat["player_buffs"], "player_debuffs": combat["player_debuffs"],
+            "monster_buffs": combat["monster_buffs"], "monster_debuffs": combat["monster_debuffs"],
+            "skills": skills,
+        })
 
 
 def register_combat_handlers(socketio):

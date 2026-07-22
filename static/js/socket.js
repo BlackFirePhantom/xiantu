@@ -80,6 +80,7 @@ socket.on("afk_tick", (data) => {
     socket.emit("get_state");
 });
 socket.on("npc_detail", (data) => renderNPCDetail(data));
+socket.on("shop_list", (data) => renderShop(data.items));
 
 // 物品详情
 socket.on("item_detail", (data) => {

@@ -10,10 +10,11 @@ from models import get_leaderboard
 from game_state import (
     get_cached_character as get_character,
     update_cached_character as update_character,
-    get_character_inventory_cached as get_character_inventory
+    get_character_inventory_cached as get_character_inventory,
+    set_character_inventory_cached as set_character_inventory,
 )
 from game_data import (
-    LOCATIONS, SPIRIT_ROOTS, TECHNIQUES, MERIDIANS,
+    LOCATIONS, SPIRIT_ROOTS, TECHNIQUES, MERIDIANS, ITEMS,
     realm_name, lookup_item, TECHNIQUE_MAX_PROFICIENCY
 )
 from game.utils import (
@@ -72,13 +73,31 @@ def do_get_state(user_id):
         emit("need_create")
         return
 
-    # 处理离线挂机
-    gain, elapsed = process_offline_cultivation(char)
-    if gain > 0:
-        new_exp = char["exp"] + gain
-        update_character(user_id, exp=new_exp, last_active=datetime.now(timezone.utc).isoformat())
+    # 处理离线挂机（修为 + 材料掉落 + 安全区回血，与在线 AFK 路径一致）
+    reward = process_offline_cultivation(char)
+    if reward["exp"] > 0 or reward["drops"] or reward["heal_to_full"]:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        updates = {"last_active": now_iso}
+        if reward["exp"] > 0:
+            updates["exp"] = char["exp"] + reward["exp"]
+        if reward["heal_to_full"]:
+            stats = get_full_stats(char)
+            updates["hp"] = stats["max_hp"]
+        update_character(user_id, **updates)
+        if reward["drops"]:
+            inv = get_character_inventory(user_id)
+            for item_id in reward["drops"]:
+                inv[item_id] = inv.get(item_id, 0) + 1
+            set_character_inventory(user_id, inv)
         char = get_character(user_id)
-        emit("game_msg", {"text": f"你闭关修炼了 {format_duration(elapsed)}，修为增长 {gain}。", "type": "heal"})
+        msg = f"你闭关修炼了 {format_duration(reward['elapsed'])}，修为增长 {reward['exp']}。"
+        if reward["drops"]:
+            drop_names = "、".join(ITEMS[d]["name"] for d in reward["drops"] if d in ITEMS)
+            if drop_names:
+                msg += f" 另获材料：{drop_names}。"
+        if reward["heal_to_full"]:
+            msg += " 安全区灵气充沛，气血已恢复满值。"
+        emit("game_msg", {"text": msg, "type": "heal"})
     else:
         update_character(user_id, last_active=datetime.now(timezone.utc).isoformat())
 

@@ -569,17 +569,19 @@ def get_online_count():
 
 def get_arena_opponents(user_id):
     with get_db() as conn:
-        char = conn.execute("SELECT arena_score FROM characters WHERE user_id = ?", (user_id,)).fetchone()
+        char = conn.execute("SELECT arena_score, level FROM characters WHERE user_id = ?", (user_id,)).fetchone()
         if not char:
             return []
         score = char["arena_score"]
+        player_level = char["level"]
         opponents = conn.execute(
             """SELECT user_id, name, level, arena_score, weapon, armor, accessory, spirit_root
                FROM characters
                WHERE user_id != ?
+                 AND abs(level - ?) <= 5
                ORDER BY abs(arena_score - ?) ASC
                LIMIT 3""",
-            (user_id, score),
+            (user_id, player_level, score),
         ).fetchall()
         return [dict(row) for row in opponents]
 

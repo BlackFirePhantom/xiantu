@@ -1,15 +1,14 @@
 """Socket.IO handlers for the weekly secret realm."""
 
-from datetime import date
 import logging
 
-from flask import session
+from flask import session, request
 from flask_socketio import emit, join_room, leave_room
 
 import game_state
 from game.secret_realm import EXPLORATION_LIMIT, get_season_modifier, get_weekly_boss
 from game.secret_realm_team import create_team, get_team_for_user, join_team, leave_team
-from game.utils import get_full_stats
+from game.utils import get_full_stats, week_id as _week_id
 from game_data import TECHNIQUES
 from handlers.combat import _effective_atk, _effective_def, _get_player_skills, _process_player_action
 from models import (
@@ -26,11 +25,6 @@ from .base import do_get_state
 
 
 logger = logging.getLogger("xiantu.secret_realm")
-
-
-def _week_id(today=None):
-    iso_week = (today or date.today()).isocalendar()
-    return f"{iso_week.year}-W{iso_week.week:02d}"
 
 
 def _team_state(user_id):
@@ -98,7 +92,7 @@ def register_secret_realm_handlers(socketio):
         join_room(team["id"])
         emit("game_msg", {"text": f"已创建秘境队伍，队伍码：{team['id']}。单人即可开启秘境。", "type": "system"})
         _emit_state(user_id)
-        socketio.emit("secret_realm_team_changed", {"team_id": team["id"]}, room=team["id"])
+        socketio.emit("secret_realm_team_changed", {"team_id": team["id"]}, room=team["id"], skip_sid=request.sid)
 
     @socketio.on("secret_realm_team_join")
     def handle_secret_realm_team_join(data):
@@ -170,7 +164,7 @@ def register_secret_realm_handlers(socketio):
         if not team:
             team = create_team(user_id)
             join_room(team["id"])
-            socketio.emit("secret_realm_team_changed", {"team_id": team["id"]}, room=team["id"])
+            socketio.emit("secret_realm_team_changed", {"team_id": team["id"]}, room=team["id"], skip_sid=request.sid)
 
         action = data.get("action", "attack") if isinstance(data, dict) else "attack"
         if not isinstance(action, str):
@@ -335,14 +329,14 @@ def register_secret_realm_handlers(socketio):
                 socketio.emit("game_msg", {
                     "text": f"【秘境战报】队友【{char['name']}】挑战{boss_config['name']}，不幸陨落并传送回青云镇！",
                     "type": "error"
-                }, room=team["id"])
+                }, room=team["id"], skip_sid=request.sid)
         elif result["reward_granted"]:
             emit("game_msg", {"text": f"{boss_config['name']}伏诛！你获得限定素材【赤焰晶】。", "type": "buff"})
             if team and team_size > 1:
                 socketio.emit("game_msg", {
                     "text": f"【秘境捷报】首领{boss_config['name']}已被【{char['name']}】成功击败！",
                     "type": "buff"
-                }, room=team["id"])
+                }, room=team["id"], skip_sid=request.sid)
         else:
             action_text = " ".join(action_log)
             emit("game_msg", {
@@ -353,9 +347,9 @@ def register_secret_realm_handlers(socketio):
                 socketio.emit("game_msg", {
                     "text": f"【秘境共战】队友【{char['name']}】对{boss_config['name']}出手，造成了 {result['damage']} 点伤害，自身承受 {result['player_damage']} 点反击伤害！",
                     "type": "fight"
-                }, room=team["id"])
+                }, room=team["id"], skip_sid=request.sid)
 
         if team and team_size > 1:
-            socketio.emit("secret_realm_team_changed", {"team_id": team["id"]}, room=team["id"])
+            socketio.emit("secret_realm_team_changed", {"team_id": team["id"]}, room=team["id"], skip_sid=request.sid)
         _emit_state(user_id)
         do_get_state(user_id)

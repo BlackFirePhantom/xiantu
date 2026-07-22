@@ -55,8 +55,9 @@ def simulate_pvp(challenger, defender):
         for tid in learned:
             t = TECHNIQUES.get(tid)
             if t and t.get("skill"):
-                # 如果指定了过滤列表（防守技能），则只保留在过滤列表中的技能
-                if filter_list is not None and len(filter_list) > 0:
+                # 防守方：若配置了防守技能列表（非空），则只保留列表中的技能；
+                # 空列表 = 未配置，自动使用全部已学技能参战（最强防守）。
+                if filter_list:
                     if tid not in filter_list:
                         continue
                 skills.append(t["skill"])

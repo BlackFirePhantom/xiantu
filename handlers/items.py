@@ -15,7 +15,8 @@ from game_state import (
 from game_data import (
     LOCATIONS, ITEMS, RECIPES, FORGE_RECIPES, MONSTERS, DROP_TABLE,
     MAP_MONSTER_DROPS, PET_EGG_MONSTER_DROPS, LOCATION_UNIQUE_DROPS,
-    FORGE_REALM_BONUS_PER_LV, realm_name, generate_equip, lookup_item
+    FORGE_REALM_BONUS_PER_LV, realm_name, generate_equip, lookup_item,
+    SHOP_ITEMS, shop_category
 )
 from game.utils import get_full_stats
 
@@ -380,6 +381,23 @@ def register_items_handlers(socketio):
             "sources": sources,
         })
 
+    @socketio.on("get_shop")
+    def handle_get_shop():
+        """向客户端推送坊市商品列表，作为前端渲染的唯一数据源。"""
+        if "user_id" not in session: return
+        items = []
+        for iid in SHOP_ITEMS:
+            entry = ITEMS.get(iid)
+            if not entry: continue
+            items.append({
+                "id": iid,
+                "name": entry["name"],
+                "desc": entry.get("desc", ""),
+                "price": entry["price"],
+                "cat": shop_category(entry),
+            })
+        emit("shop_list", {"items": items})
+
     @socketio.on("buy_item")
     def handle_buy_item(data):
         if "user_id" not in session: return
@@ -390,7 +408,9 @@ def register_items_handlers(socketio):
             emit("game_msg", {"text": "坊市只在青云镇开放。", "type": "error"})
             return
         item_id = data.get("item")
-        if not item_id or item_id not in ITEMS: return
+        if not item_id or item_id not in SHOP_ITEMS:
+            emit("game_msg", {"text": "此物非坊市所售。", "type": "error"})
+            return
         item = ITEMS[item_id]
         if item["price"] > char["gold"]:
             emit("game_msg", {"text": f"灵石不足！需要 {item['price']} 灵石。", "type": "error"})

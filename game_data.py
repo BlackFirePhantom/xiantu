@@ -645,6 +645,31 @@ ITEMS = {
     "frag_jiuyang_3":  {"name": "九阳功·纯阳卷", "desc": "九阳功纯阳卷，集齐三卷可领悟完整功法",   "type": "technique_fragment", "fragment_group": "jiuyang", "fragment_index": 3, "fragment_total": 3, "price": 0},
 }
 
+# ═══════════════ 坊市白名单 ═══════════════
+# 坊市仅出售以下物品（有序）。buy_item 处理器会拒绝此列表之外的 item_id，
+# 防止客户端绕过前端硬编码直接购买高价物品或 0 价残卷。
+SHOP_ITEMS = (
+    "huiqi_dan", "huixi_dan", "huichun_dan", "peiyuan_dan", "dingdan",
+    "liliang_fulu", "huti_fulu",
+    "tiemu_sword", "cloth_robe",
+    "qingyu_peidai", "tongqian_hufu",
+    "egg_common", "pet_feed",
+)
+
+
+def shop_category(item):
+    """根据 ITEMS 条目推断坊市展示分类。"""
+    t = item.get("type")
+    if t == "equip":
+        return "饰品" if item.get("slot") == "accessory" else "法宝"
+    if t in ("pet_egg", "pet_food"):
+        return "灵宠"
+    if t == "consumable":
+        if item.get("effect") in ("atk_up", "def_up"):
+            return "符箓"
+        return "丹药"
+    return "其他"
+
 # ═══════════════ 藏宝图系统 ═══════════════
 # 残卷合成配方：group_id -> (technique_id, [fragment_item_ids])
 FRAGMENT_RECIPES = {

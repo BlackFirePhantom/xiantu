@@ -36,8 +36,7 @@ PORT = int(os.environ.get("XIANTU_PORT", "5000"))
 
 # 挂机配置
 AFK_TIMEOUT = 600       # 10分钟无操作进入挂机
-AFK_MAX_HOURS = 24      # 挂机最大时长
-AFK_INTERVAL = 60       # 挂机奖励间隔（秒）
+AFK_INTERVAL = 60       # 挂机奖励间隔（秒），与 game.cultivation._DROP_INTERVAL 对齐
 
 # 拍卖行配置
 AUCTION_REFRESH_INTERVAL = 4 * 3600 * 1000  # 4小时(ms)

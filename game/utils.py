@@ -2,6 +2,7 @@
 
 import random
 import json
+from datetime import date
 from game_data import (
     REALMS, SPIRIT_ROOTS, TECHNIQUES, MERIDIANS, EXP_PER_LEVEL, MAX_LEVEL,
     ITEMS, PET_BATTLE_RATIO,
@@ -9,6 +10,16 @@ from game_data import (
     realm_name, lookup_item,
 )
 from npc_data import SECT_RANKS, get_sect_rank
+
+
+def week_id(today=None):
+    """返回 ISO 周标识符，格式 ``{year}-W{week:02d}``。
+
+    用于按周刷新的共享 Boss（秘境首领、宗门 Boss）和周榜排行。
+    传 ``today`` 仅用于测试注入。
+    """
+    iso_week = (today or date.today()).isocalendar()
+    return f"{iso_week.year}-W{iso_week.week:02d}"
 
 
 def calc_level_stats(level):

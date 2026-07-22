@@ -147,7 +147,13 @@ def register_arena_handlers(socketio):
             
         # 开始模拟战斗
         winner_id, score_change, combat_log = simulate_pvp(char, dict(opp))
-        
+
+        # 极其关键：写入数据库前必须先把脏缓存刷盘，否则 refresh_cached_character
+        # 会丢弃未提交的缓存改动（如 arena_challenges_today 重置、防守技能配置），
+        # 而 models.update_arena_result 从 DB 读取旧值，导致每日次数上限被绕过。
+        game_state.save_cached_character(user_id)
+        game_state.save_cached_character(opponent_id)
+
         # 写入数据库并更新属性
         res = models.update_arena_result(user_id, opponent_id, winner_id, score_change, combat_log)
         if not res.get("ok"):

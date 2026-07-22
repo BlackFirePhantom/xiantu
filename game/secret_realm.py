@@ -49,24 +49,18 @@ SEASON_MODIFIERS = (
         "id": "spirit_tide",
         "name": "灵潮涌动",
         "description": "秘境灵气充盈，探索额外获得灵石。",
-        "gold_bonus": 4,
-        "contribution_bonus": 0,
         "boss_damage_multiplier": 1,
     },
     {
         "id": "sect_rally",
         "name": "同门共鸣",
         "description": "同门战意高涨，探索额外获得宗门贡献。",
-        "gold_bonus": 0,
-        "contribution_bonus": 3,
         "boss_damage_multiplier": 1,
     },
     {
         "id": "flame_break",
         "name": "赤焰裂隙",
         "description": "首领护体松动，对首领造成的伤害提升 25%。",
-        "gold_bonus": 0,
-        "contribution_bonus": 0,
         "boss_damage_multiplier": 1.25,
     },
 )
@@ -86,16 +80,16 @@ def new_run(explorations=0, contribution=0, boss_damage=0):
     }
 
 
-def explore(run, roll, *, gold_bonus=0, contribution_bonus=0):
+def explore(run, roll):
     """Resolve one exploration and return rewards without mutating storage."""
     if run["explorations"] >= EXPLORATION_LIMIT:
         return {"ok": False, "reason": "exploration_limit"}
 
     updated_run = dict(run)
     updated_run["explorations"] += 1
-    contribution_gain = EXPLORATION_CONTRIBUTION + contribution_bonus
+    contribution_gain = EXPLORATION_CONTRIBUTION
     updated_run["contribution"] += contribution_gain
-    gold_gain = 8 + roll + gold_bonus
+    gold_gain = 8 + roll
     return {
         "ok": True,
         "run": updated_run,

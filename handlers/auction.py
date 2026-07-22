@@ -10,6 +10,7 @@ import game_state
 from game_state import (
     get_cached_character as get_character,
     update_cached_character as update_character,
+    modify_cached_character,
     get_character_inventory_cached as get_character_inventory,
     set_character_inventory_cached as set_character_inventory
 )
@@ -135,15 +136,18 @@ def _process_auction_ticks():
                     # 玩家拍得：扣灵石 + 发放物品
                     uid = a.get("player_user_id")
                     if uid:
-                        char = get_character(uid)
-                        if char and char["gold"] >= a["current_price"]:
-                            update_character(uid, gold=char["gold"] - a["current_price"])
+                        # 原子扣减灵石，防止后台线程与玩家请求之间的 TOCTOU 竞态
+                        result = modify_cached_character(uid, gold=-a["current_price"])
+                        if result is not None and result["gold"] >= 0:
                             inv = get_character_inventory(uid)
                             inv[a["item_id"]] = inv.get(a["item_id"], 0) + 1
                             set_character_inventory(uid, inv)
                             if game_state.socketio:
                                 game_state.socketio.emit("auction_log", {"text": f"你拍得了【{a['name']}】，扣除 {a['current_price']} 灵石！", "type": "shop"}, namespace="/")
-                        elif char:
+                        else:
+                            # 灵石不足，回滚扣减
+                            if result is not None:
+                                modify_cached_character(uid, gold=a["current_price"])
                             if game_state.socketio:
                                 game_state.socketio.emit("auction_log", {"text": f"你拍得了【{a['name']}】但灵石不足，拍品流拍！", "type": "error"}, namespace="/")
                     a["won"] = True

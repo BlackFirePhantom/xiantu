@@ -1,21 +1,14 @@
 """Socket.IO handlers for the weekly shared sect boss."""
 
-from datetime import date
-
 from flask import session
 from flask_socketio import emit
 
 import game_state
-from game.utils import get_full_stats
+from game.utils import get_full_stats, week_id as _week_id
 from models import apply_sect_boss_damage, get_sect_boss, get_sect_boss_leaderboard
 from .base import do_get_state
 
 SECT_BOSS_MAX_HP = 1200
-
-
-def _week_id(today=None):
-    iso_week = (today or date.today()).isocalendar()
-    return f"{iso_week.year}-W{iso_week.week:02d}"
 
 
 def _state_for(user_id):

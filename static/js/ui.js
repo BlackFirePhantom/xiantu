@@ -685,33 +685,18 @@ function toggleShop() {
     if (shopDiv.style.display === "none") {
         shopDiv.style.display = "block";
         invDiv.style.display = "none";
-        renderShop();
+        socket.emit("get_shop");
     } else {
         shopDiv.style.display = "none";
         invDiv.style.display = "block";
     }
 }
 
-function renderShop() {
-    const shopItems = [
-        { id: "huiqi_dan",     name: "回气丹",     desc: "恢复30气血",       price: 15,  cat: "丹药" },
-        { id: "huixi_dan",     name: "回灵丹",     desc: "恢复30灵力",       price: 25,  cat: "丹药" },
-        { id: "huichun_dan",   name: "回春丹",     desc: "恢复80气血",       price: 40,  cat: "丹药" },
-        { id: "peiyuan_dan",   name: "培元丹",     desc: "获得50修为",       price: 60,  cat: "丹药" },
-        { id: "dingdan",       name: "凝神定魄丹", desc: "下次战斗伤害+30%", price: 150, cat: "丹药" },
-        { id: "liliang_fulu",  name: "力量符箓",   desc: "攻击+2(永久)",     price: 100, cat: "符箓" },
-        { id: "huti_fulu",     name: "护体符箓",   desc: "防御+2(永久)",     price: 100, cat: "符箓" },
-        { id: "tiemu_sword",   name: "铁木剑",     desc: "凡器·下品 攻+3",   price: 30,  cat: "法宝" },
-        { id: "cloth_robe",    name: "粗布道袍",   desc: "凡器 防+3",        price: 35,  cat: "法宝" },
-        { id: "qingyu_peidai", name: "青玉佩",     desc: "攻+2 气血+10",     price: 80,  cat: "饰品" },
-        { id: "tongqian_hufu", name: "铜钱护符",   desc: "防+2 气血+10",     price: 80,  cat: "饰品" },
-        { id: "egg_common",    name: "灵兽蛋",     desc: "孵化普通灵宠",     price: 80,  cat: "灵宠" },
-        { id: "pet_feed",      name: "灵兽饲料",   desc: "灵宠经验+10",      price: 15,  cat: "灵宠" },
-    ];
+function renderShop(items) {
     const div = document.getElementById("shop-list");
     div.innerHTML = "";
     let lastCat = "";
-    shopItems.forEach((item) => {
+    (items || []).forEach((item) => {
         if (item.cat !== lastCat) {
             lastCat = item.cat;
             const header = document.createElement("div");
@@ -721,7 +706,7 @@ function renderShop() {
         }
         const entry = document.createElement("div");
         entry.className = "item-entry";
-        entry.innerHTML = `<span><span class="item-name">${item.name}</span> <span class="item-price">${item.price}灵石</span></span><span style="color:#6a8a7a;font-size:11px;">${item.desc}</span>`;
+        entry.innerHTML = `<span><span class="item-name">${esc(item.name)}</span> <span class="item-price">${item.price}灵石</span></span><span style="color:#6a8a7a;font-size:11px;">${esc(item.desc)}</span>`;
         entry.onclick = () => socket.emit("buy_item", { item: item.id });
         div.appendChild(entry);
     });
@@ -1242,7 +1227,7 @@ function addLog(text, type) {
     const log = document.getElementById("game-log");
     const div = document.createElement("div");
     div.className = `log-line log-${type || "fight"}`;
-    div.innerHTML = `<span class="log-time">${timeStr()}</span> ${text}`;
+    div.innerHTML = `<span class="log-time">${timeStr()}</span> ${esc(text)}`;
     log.appendChild(div);
     requestAnimationFrame(() => { log.scrollTop = log.scrollHeight; });
 }
@@ -1580,6 +1565,7 @@ function renderArena(data) {
         <div class="arena-defense-setup">
             <div class="arena-card-title" style="margin-top:15px; margin-bottom:5px;">防守套路配置</div>
             <h5 style="margin: 0 0 10px 0; color: #89979e; font-size:11px; font-weight: normal;">配置 3 个斗法释放的灵技</h5>
+            <h5 style="margin: 0 0 10px 0; color: #d4b870; font-size:11px; font-weight: normal;">提示：未配置时将自动使用全部已学技能参战（最强防守）</h5>
     `;
     
     for (let i = 1; i <= 3; i++) {
